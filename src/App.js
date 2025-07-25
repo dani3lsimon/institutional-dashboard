@@ -3,22 +3,11 @@ import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient'; // Make sure you have this file
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line, BarChart, Bar, ScatterChart, Scatter, ZAxis, Cell } from 'recharts';
 
-// Color mapping for consistent class names
-const colorMap = {
-  green: 'text-green-400',
-  blue: 'text-blue-400',
-  red: 'text-red-400',
-  yellow: 'text-yellow-400',
-  purple: 'text-purple-400',
-  orange: 'text-orange-400',
-  cyan: 'text-cyan-400'
-};
-
 // --- Reusable Components ---
 const MetricCard = ({ title, value, subtitle, color = 'blue', size = 'normal' }) => (
     <div className={`bg-slate-800 p-4 rounded-lg border border-slate-600 ${size === 'large' ? 'col-span-2' : ''}`}>
         <div className="text-slate-400 text-sm">{title}</div>
-        <div className={`${colorMap[color]} ${size === 'large' ? 'text-3xl' : 'text-xl'} font-bold`}>{value}</div>
+        <div className={`text-${color}-400 ${size === 'large' ? 'text-3xl' : 'text-xl'} font-bold`}>{value}</div>
         {subtitle && <div className="text-slate-500 text-xs mt-1">{subtitle}</div>}
     </div>
 );
@@ -131,10 +120,10 @@ function ResultsPage() {
     }, [id]);
 
     if (loading) {
-        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-blue-400 animate-pulse">Loading Report...</div>;
+        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white text-blue-400 animate-pulse">Loading Report...</div>;
     }
     if (error) {
-        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-red-400">Error: {error}</div>;
+        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white text-red-400">Error: {error}</div>;
     }
     if (!reportData) {
         return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">Report data not available.</div>;
@@ -233,12 +222,12 @@ const OverviewTab = ({ reportData }) => {
                   ]}
                 ].map(section => (
                   <div key={section.title} className="bg-slate-800 p-4 rounded-lg border border-slate-600">
-                    <h3 className={`${colorMap[section.color]} font-semibold mb-3`}>{section.title}</h3>
+                    <h3 className={`text-${section.color}-400 font-semibold mb-3`}>{section.title}</h3>
                     <div className="space-y-2 text-sm">
                       {section.data.map(item => (
                         <div key={item.label} className="flex justify-between items-start">
                           <span className="text-slate-400">{item.label}</span>
-                          <span className={`font-semibold text-right ${item.color ? colorMap[item.color] : ''}`}>{item.value}</span>
+                          <span className={`font-semibold text-right ${item.color ? `text-${item.color}-400` : ''}`}>{item.value}</span>
                         </div>
                       ))}
                     </div>
@@ -294,7 +283,7 @@ const PerformanceTab = ({ reportData }) => {
                 <table className="w-full text-sm text-left">
                     <thead>
                         <tr className="border-b border-slate-600 text-slate-400">
-                            <th className="py-2">AI Model</th><th>Trades</th><th>Win Rate</th><th>Avg P&L/Trade</th><th>Confidence</th>
+                            <th className="py-2">AI Model</th><th>Trades</th><th>Win Rate</th><th>Total P&L</th><th>Confidence</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -303,7 +292,7 @@ const PerformanceTab = ({ reportData }) => {
                                 <td className="py-2 font-semibold text-cyan-400">{s.source}</td>
                                 <td>{s.count}</td>
                                 <td className={`${parseFloat(s.winRate) > 50 ? 'text-green-400' : 'text-yellow-400'}`}>{s.winRate}%</td>
-                                <td className={`${parseFloat(s.avgPnl) > 0 ? 'text-green-400' : 'text-red-400'}`}>${s.avgPnl}</td>
+                                <td className={`${parseFloat(s.totalPnL) > 0 ? 'text-green-400' : 'text-red-400'}`}>${s.totalPnL}</td>
                                 <td className="text-purple-400">{s.avgConfidence}%</td>
                             </tr>
                         ))}
