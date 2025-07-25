@@ -102,6 +102,11 @@ export default async function handler(req, res) {
         drawdown: Math.round(drawdownPercent * 100) / 100,
         pnl: Math.round(trade.pnl * 100) / 100,
         returnPercent: Math.round(((balance / startingBalance - 1) * 100) * 100) / 100,
+        // FIX: Pass these values through for the charts
+        risk_percentage: trade.risk_percentage,
+        position_size: trade.position_size,
+        entry_time: trade.entry_time,
+        balance_after: trade.balance_after,
       });
     });
 

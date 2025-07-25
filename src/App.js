@@ -7,7 +7,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 const MetricCard = ({ title, value, subtitle, color = 'blue', size = 'normal' }) => (
     <div className={`bg-slate-800 p-4 rounded-lg border border-slate-600 ${size === 'large' ? 'col-span-2' : ''}`}>
         <div className="text-slate-400 text-sm">{title}</div>
-        <div className={`text-${color}-400 ${size === 'large' ? 'text-3xl' : 'text-xl'} font-bold`}>{value}</div>
+        <div className={`${color === 'blue' ? 'text-blue-400' : color === 'red' ? 'text-red-400' : color === 'green' ? 'text-green-400' : color === 'yellow' ? 'text-yellow-400' : color === 'purple' ? 'text-purple-400' : 'text-blue-400'} ${size === 'large' ? 'text-3xl' : 'text-xl'} font-bold`}>{value}</div>
         {subtitle && <div className="text-slate-500 text-xs mt-1">{subtitle}</div>}
     </div>
 );
@@ -82,12 +82,12 @@ function UploadPage() {
     };
 
     return (
-        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">
             <div className="text-center p-8 bg-slate-800/50 rounded-lg border border-slate-700 max-w-md mx-auto">
                 <h2 className="text-2xl font-bold text-blue-400 mb-4">Generate Sharable Report</h2>
                 <p className="text-slate-400 mb-6">Select your `...trades.csv` file to process it and generate a secure, shareable link to the results.</p>
                 <input type="file" id="file-upload" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Select CSV File</label>
+                <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Select CSV File</label>
                 {loading && <div className="mt-4 text-blue-400 animate-pulse">Processing Report...</div>}
                 {error && <div className="mt-4 text-red-400">{error}</div>}
             </div>
@@ -120,20 +120,20 @@ function ResultsPage() {
     }, [id]);
 
     if (loading) {
-        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white text-blue-400 animate-pulse">Loading Report...</div>;
+        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-blue-400 animate-pulse">Loading Report...</div>;
     }
     if (error) {
-        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white text-red-400">Error: {error}</div>;
+        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-red-400">Error: {error}</div>;
     }
     if (!reportData) {
-        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">Report data not available.</div>;
+        return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">Report data not available.</div>;
     }
 
     const tabs = ['Overview', 'Portfolio Equity', 'Performance', 'Risk Analysis', 'Trade Analysis', 'Institutional Grade'];
     const { headerData } = reportData;
 
     return (
-        <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6 text-white font-sans">
+        <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6 font-sans">
              <div className="text-center mb-8">
                 <h1 className="text-3xl md:text-4xl font-bold text-blue-400 mb-2">AI Trading Model: Institutional Performance Review</h1>
                 <p className="text-slate-300 text-lg">Comprehensive Backtest Analysis & Risk Assessment</p>
@@ -222,12 +222,12 @@ const OverviewTab = ({ reportData }) => {
                   ]}
                 ].map(section => (
                   <div key={section.title} className="bg-slate-800 p-4 rounded-lg border border-slate-600">
-                    <h3 className={`text-${section.color}-400 font-semibold mb-3`}>{section.title}</h3>
+                    <h3 className={`${section.color === 'green' ? 'text-green-400' : section.color === 'red' ? 'text-red-400' : section.color === 'blue' ? 'text-blue-400' : 'text-purple-400'} font-semibold mb-3`}>{section.title}</h3>
                     <div className="space-y-2 text-sm">
                       {section.data.map(item => (
                         <div key={item.label} className="flex justify-between items-start">
                           <span className="text-slate-400">{item.label}</span>
-                          <span className={`font-semibold text-right ${item.color ? `text-${item.color}-400` : ''}`}>{item.value}</span>
+                          <span className={`font-semibold text-right ${item.color ? `${item.color === 'green' ? 'text-green-400' : item.color === 'red' ? 'text-red-400' : item.color === 'blue' ? 'text-blue-400' : item.color === 'yellow' ? 'text-yellow-400' : item.color === 'purple' ? 'text-purple-400' : 'text-orange-400'}` : ''}`}>{item.value}</span>
                         </div>
                       ))}
                     </div>
@@ -292,7 +292,7 @@ const PerformanceTab = ({ reportData }) => {
                                 <td className="py-2 font-semibold text-cyan-400">{s.source}</td>
                                 <td>{s.count}</td>
                                 <td className={`${parseFloat(s.winRate) > 50 ? 'text-green-400' : 'text-yellow-400'}`}>{s.winRate}%</td>
-                                <td className={`${parseFloat(s.totalPnL) > 0 ? 'text-green-400' : 'text-red-400'}`}>${s.totalPnL}</td>
+                                <td className={`${parseFloat(s.totalPnL) > 0 ? 'text-green-400' : 'text-yellow-400'}`}>${s.totalPnL}</td>
                                 <td className="text-purple-400">{s.avgConfidence}%</td>
                             </tr>
                         ))}
