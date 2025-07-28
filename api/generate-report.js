@@ -453,107 +453,135 @@ function analyzePatternStressPerformance(trades) {
   );
 }
 
-// 8. CORRECTED COMPONENT SCORES CALCULATION - TO MATCH PYTHON EXACTLY
+/**
+ * Calculates component scores from raw trades.
+ * This version calculates AI model metrics directly from the trades array.
+ */
 function calculateComponentScores(trades, metrics) {
-  const performance = metrics.performance || {};
-  const risk = metrics.risk || {};
-  
-  // Performance Score (0-100) - UNCHANGED
+  // Performance Score (unchanged)
   let performanceScore = 0;
-  performanceScore += Math.min((parseFloat(performance.sharpe_ratio) || 0) * 20, 40); // Max 40 for Sharpe
-  performanceScore += Math.min((parseFloat(performance.total_return_pct) || 0) / 2, 30); // Max 30 for returns
-  performanceScore += Math.min((parseFloat(performance.win_rate_pct) || 0) / 2, 30); // Max 30 for win rate
-  
-  // Risk Score (0-100) - UNCHANGED
+  performanceScore += Math.min((parseFloat(metrics.performance?.sharpe_ratio) || 0) * 20, 40);
+  performanceScore += Math.min((parseFloat(metrics.performance?.total_return_pct) || 0) / 2, 30);
+  performanceScore += Math.min((parseFloat(metrics.performance?.win_rate_pct) || 0) / 2, 30);
+
+  // Risk Score (unchanged)
   let riskScore = 100;
-  const maxDD = Math.abs(parseFloat(risk.max_drawdown_pct) || 0);
-  riskScore -= Math.min(maxDD * 3, 50); // Subtract for drawdown
-  const var95 = Math.abs(parseFloat(risk.var_95_pct) || 0);
-  riskScore -= Math.min(var95 * 10, 30); // Subtract for VaR
+  const maxDD = Math.abs(parseFloat(metrics.risk?.max_drawdown_pct) || 0);
+  riskScore -= Math.min(maxDD * 3, 50);
+  const var95 = Math.abs(parseFloat(metrics.risk?.var_95_pct) || 0);
+  riskScore -= Math.min(var95 * 10, 30);
   riskScore = Math.max(riskScore, 0);
-  
-  // 🔧 FIXED AI Effectiveness Score (0-100) - TO MATCH PYTHON INSTITUTIONAL CALCULATION
-  const aiModels = metrics.ai_models || {};
-  const modelPerf = aiModels.model_performance || {};
-  
-  console.log('🔍 DEBUG - AI Effectiveness Calculation:', {
-    aiModels: aiModels,
-    modelPerf: modelPerf
-  });
-  
+
+  // INSTITUTIONAL AI EFFECTIVENESS SCORE (IMPROVED)
   let aiScore = 0;
-  let totalModels = 0;
-  let totalTrades = 0;
-  
-  // First, calculate total trades across all models
-  Object.values(modelPerf).forEach(model => {
-    if (model.trade_count > 0) {
-      totalTrades += model.trade_count;
+  const models = {};
+
+  // 1. Group trades by signal source and calculate model metrics
+  trades.forEach(trade => {
+    const source = trade.signal_source;
+    if (!models[source]) {
+      models[source] = {
+        trades: [],
+        wins: 0,
+        confidenceSum: 0,
+        returnSum: 0,
+        maxDrawdown: 0,
+        durations: []
+      };
+    }
+    
+    const model = models[source];
+    model.trades.push(trade);
+    model.confidenceSum += parseFloat(trade.confidence);
+    
+    if (trade.result === 'WIN') {
+      model.wins++;
+      model.returnSum += parseFloat(trade.pnl);
+    }
+    
+    // Track max intratrade drawdown
+    const maxDrawdown = Math.abs(parseFloat(trade.max_drawdown_pnl || 0));
+    if (maxDrawdown > model.maxDrawdown) model.maxDrawdown = maxDrawdown;
+    
+    // Track duration for activity weighting
+    if (trade.duration) {
+      const mins = parseDuration(trade.duration);
+      model.durations.push(mins);
     }
   });
-  
-  // 🎯 PYTHON-STYLE CALCULATION: Weighted average approach (not sum)
-  Object.values(modelPerf).forEach(model => {
-    if (model.trade_count > 0) {
-      totalModels += 1;
-      
-      // Calculate model effectiveness (0-100 scale per model)
-      const winRateScore = Math.min((model.win_rate_pct || 0), 100); // Use full win rate percentage
-      
-      // 🔧 CRITICAL FIX: Use Bayesian confidence when available
-      // Python uses the enhanced confidence, not base confidence
-      let effectiveConfidence = model.avg_confidence || 0;
-      
-      // If this is using base confidence (0-1 range), but we need Bayesian confidence
-      // Check if confidence seems to be in 0-1 range and scale appropriately
-      if (effectiveConfidence <= 1.0) {
-        effectiveConfidence = effectiveConfidence * 100; // Convert to percentage
+
+  // 2. Calculate model effectiveness if we have trades
+  if (Object.keys(models).length > 0) {
+    let totalWeightedScore = 0;
+    let totalTrades = trades.length;
+    let validModels = 0;
+
+    // Calculate model scores
+    Object.entries(models).forEach(([modelName, modelData]) => {
+      const tradeCount = modelData.trades.length;
+      if (tradeCount > 0) {
+        validModels++;
+        
+        // Core metrics
+        const winRate = (modelData.wins / tradeCount) * 100;
+        const avgConfidence = modelData.confidenceSum / tradeCount;
+        const avgReturn = modelData.returnSum / modelData.wins || 0;
+        const avgDuration = modelData.durations.reduce((a, b) => a + b, 0) / tradeCount;
+        
+        // Advanced metrics
+        const profitFactor = modelData.wins / (tradeCount - modelData.wins) || 10;
+        const returnDrawdownRatio = avgReturn / Math.max(modelData.maxDrawdown, 0.01);
+        
+        // Confidence scaling
+        const scaledConfidence = avgConfidence <= 1 ? avgConfidence * 100 : avgConfidence;
+        
+        // Activity factor (penalize stale models)
+        const lastTradeDate = new Date(Math.max(...modelData.trades.map(t => 
+          new Date(t.entry_time).getTime()
+        )));
+        const daysSinceLastTrade = (new Date() - lastTradeDate) / (1000 * 3600 * 24);
+        const recencyPenalty = Math.max(0, 1 - (daysSinceLastTrade / 30));
+        
+        // Model score components
+        const winScore = Math.min(winRate * 0.35, 35);
+        const confidenceScore = Math.min(scaledConfidence * 0.25, 25);
+        const riskAdjustedScore = Math.min(Math.log1p(returnDrawdownRatio) * 15, 15);
+        const activityScore = Math.min((1 / Math.log1p(avgDuration)) * 10 * recencyPenalty, 10);
+        const consistencyScore = Math.min(Math.log1p(profitFactor) * 15, 15);
+        
+        const modelScore = winScore + confidenceScore + riskAdjustedScore + activityScore + consistencyScore;
+        
+        // Volume weighting
+        const tradeWeight = tradeCount / totalTrades;
+        totalWeightedScore += modelScore * tradeWeight;
       }
-      
-      const confidenceScore = Math.min(effectiveConfidence, 100);
-      
-      // 🎯 INSTITUTIONAL WEIGHTING: Performance gets higher weight
-      const modelEffectiveness = (winRateScore * 0.6) + (confidenceScore * 0.4);
-      
-      // Weight by trade volume (more trades = more influence)
-      const tradeWeight = model.trade_count / totalTrades;
-      
-      aiScore += modelEffectiveness * tradeWeight;
-      
-      console.log(`🔍 DEBUG - Model Analysis:`, {
-        model_name: Object.keys(modelPerf).find(k => modelPerf[k] === model),
-        trade_count: model.trade_count,
-        win_rate_pct: model.win_rate_pct,
-        avg_confidence: model.avg_confidence,
-        winRateScore: winRateScore.toFixed(1),
-        confidenceScore: confidenceScore.toFixed(1),
-        modelEffectiveness: modelEffectiveness.toFixed(1),
-        tradeWeight: tradeWeight.toFixed(3),
-        contribution: (modelEffectiveness * tradeWeight).toFixed(1)
-      });
+    });
+
+    if (validModels > 0) {
+      aiScore = Math.min(Math.max(totalWeightedScore, 0), 100);
     }
-  });
-  
-  // 🔧 FINAL INSTITUTIONAL ADJUSTMENT
-  // Apply institutional discount factor (Python uses more conservative scoring)
-  aiScore = aiScore * 0.75; // 25% institutional discount
-  
-  // Ensure within bounds
-  aiScore = Math.min(Math.max(aiScore, 0), 100);
-  
-  console.log('🔍 DEBUG - Final AI Effectiveness:', {
-    totalModels,
-    totalTrades,
-    rawScore: aiScore / 0.75,
-    adjustedScore: aiScore.toFixed(1),
-    targetPythonScore: 75.0
-  });
-  
+  }
+
   return {
     performance_score: Math.min(performanceScore, 100).toFixed(1),
     risk_score: riskScore.toFixed(1),
-    ai_effectiveness_score: aiScore.toFixed(1) // 🎯 Now should match Python's 75.0
+    ai_effectiveness_score: aiScore.toFixed(1)
   };
+}
+
+/**
+ * Helper function to parse duration strings.
+ * Example format: "1 days 02:30:15.123"
+ */
+function parseDuration(durationStr) {
+  if (!durationStr || !durationStr.includes(' days ')) return 0;
+  
+  const [daysPart, timePart] = durationStr.split(' days ');
+  const [time] = timePart.split('.');
+  const [hours, minutes, seconds] = time.split(':').map(Number);
+  
+  const days = parseInt(daysPart) || 0;
+  return (days * 1440) + (hours * 60) + minutes + (seconds / 60);
 }
 
 // === MAIN HANDLER FUNCTION ===
