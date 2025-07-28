@@ -403,22 +403,58 @@ function calculateComponentScores(trades, metrics) {
   riskScore -= Math.min(var95 * 10, 30); // Subtract for VaR
   riskScore = Math.max(riskScore, 0);
   
-  // AI Effectiveness Score (0-100)
+  // 🔧 FIXED AI Effectiveness Score (0-100)
   const aiModels = metrics.ai_models || {};
   const modelPerf = aiModels.model_performance || {};
-  let aiScore = 0;
   
+  // DEBUGGING: Log the AI models data
+  console.log('🔍 DEBUG - AI Models Data:', aiModels);
+  console.log('🔍 DEBUG - Model Performance:', modelPerf);
+  
+  let aiScore = 0;
+  let activeModels = 0;
+  
+  // Calculate weighted average instead of sum
   Object.values(modelPerf).forEach(model => {
     if (model.trade_count > 0) {
-      aiScore += Math.min((model.win_rate_pct || 0) / 2, 25); // Max 25 per model
-      aiScore += Math.min((model.avg_confidence || 0) * 25, 25); // Max 25 per model
+      activeModels += 1;
+      
+      // Win rate component (0-50 points per model)
+      const winRateScore = Math.min((model.win_rate_pct || 0) / 2, 50);
+      
+      // Confidence component (0-50 points per model) 
+      // 🔧 FIX: avg_confidence is already 0-1, multiply by 50 not 25
+      const confidenceScore = Math.min((model.avg_confidence || 0) * 50, 50);
+      
+      // Model score (0-100)
+      const modelScore = winRateScore + confidenceScore;
+      
+      console.log(`🔍 DEBUG - Model:`, {
+        winRate: model.win_rate_pct,
+        avgConfidence: model.avg_confidence,
+        winRateScore,
+        confidenceScore,
+        modelScore
+      });
+      
+      aiScore += modelScore;
     }
   });
+  
+  // 🔧 CRITICAL FIX: Average the scores instead of summing them
+  if (activeModels > 0) {
+    aiScore = aiScore / activeModels; // Take average across models
+  }
+  
+  // Ensure within bounds
+  aiScore = Math.min(Math.max(aiScore, 0), 100);
+  
+  console.log('🔍 DEBUG - Final AI Score:', aiScore, 'Active Models:', activeModels);
   
   return {
     performance_score: Math.min(performanceScore, 100).toFixed(1),
     risk_score: riskScore.toFixed(1),
-    ai_effectiveness_score: Math.min(aiScore, 100).toFixed(1)
+    ai_effectiveness_score: aiScore.toFixed(1) // 🔧 Now matches Python calculation
   };
 }
 
