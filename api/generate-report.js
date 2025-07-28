@@ -265,39 +265,108 @@ function calculateRecoveryMetrics(trades) {
   };
 }
 
-// 5. BAYESIAN LEARNING ANALYSIS
+// 5. CORRECTED BAYESIAN LEARNING ANALYSIS - TO MATCH PYTHON EXACTLY
 function analyzeBayesianLearning(trades) {
-  const firstHalf = trades.slice(0, Math.floor(trades.length / 2));
-  const secondHalf = trades.slice(Math.floor(trades.length / 2));
+  // 🔧 CRITICAL FIX 1: Sort trades by entry_time to match Python chronological order
+  const sortedTrades = trades.sort((a, b) => {
+    const dateA = new Date(a.entry_time);
+    const dateB = new Date(b.entry_time);
+    return dateA - dateB;
+  });
   
-  if (firstHalf.length === 0 || secondHalf.length === 0) {
+  // 🔧 CRITICAL FIX 2: Use Bayesian confidence if available, fallback to regular confidence
+  const tradesWithBayesian = sortedTrades.map(trade => ({
+    ...trade,
+    effective_confidence: trade.bayesian_confidence || trade.confidence,
+    has_bayesian_data: trade.bayesian_confidence !== null && trade.bayesian_confidence !== undefined
+  }));
+  
+  console.log('🔍 DEBUG - Bayesian Analysis Setup:', {
+    totalTrades: tradesWithBayesian.length,
+    tradesWithBayesianData: tradesWithBayesian.filter(t => t.has_bayesian_data).length,
+    firstTradeTime: tradesWithBayesian[0]?.entry_time,
+    lastTradeTime: tradesWithBayesian[tradesWithBayesian.length - 1]?.entry_time
+  });
+  
+  // Check if we have enough data
+  if (tradesWithBayesian.length < 4) {
     return {
       learningDetected: false,
-      winRateImprovement: 0,
-      pnlImprovement: 0,
+      winRateImprovement: '0.00',
+      pnlImprovement: '0.00',
       confidenceTrend: 'insufficient_data'
     };
   }
   
-  // Calculate metrics for both halves
-  const firstHalfWinRate = (firstHalf.filter(t => t.result === 'WIN').length / firstHalf.length) * 100;
-  const secondHalfWinRate = (secondHalf.filter(t => t.result === 'WIN').length / secondHalf.length) * 100;
+  // 🔧 CRITICAL FIX 3: Use the SAME calculation method as Python
+  // Python uses different segments for learning detection
   
-  const firstHalfAvgPnl = firstHalf.reduce((sum, t) => sum + t.pnl, 0) / firstHalf.length;
-  const secondHalfAvgPnl = secondHalf.reduce((sum, t) => sum + t.pnl, 0) / secondHalf.length;
+  // Method 1: Early vs Late comparison (like Python institutional metrics)
+  const segmentSize = Math.floor(tradesWithBayesian.length / 3); // Use thirds, not halves
+  const earlyTrades = tradesWithBayesian.slice(0, segmentSize);
+  const lateTrades = tradesWithBayesian.slice(-segmentSize); // Last third
   
-  const firstHalfConfidence = firstHalf.reduce((sum, t) => sum + t.confidence, 0) / firstHalf.length;
-  const secondHalfConfidence = secondHalf.reduce((sum, t) => sum + t.confidence, 0) / secondHalf.length;
+  // Calculate early period metrics
+  const earlyWins = earlyTrades.filter(t => t.result === 'WIN').length;
+  const earlyWinRate = (earlyWins / earlyTrades.length) * 100;
+  const earlyAvgPnl = earlyTrades.reduce((sum, t) => sum + (t.pnl || 0), 0) / earlyTrades.length;
+  const earlyAvgConfidence = earlyTrades.reduce((sum, t) => sum + t.effective_confidence, 0) / earlyTrades.length;
   
-  const winRateImprovement = secondHalfWinRate - firstHalfWinRate;
-  const pnlImprovement = secondHalfAvgPnl - firstHalfAvgPnl;
-  const confidenceImprovement = secondHalfConfidence - firstHalfConfidence;
+  // Calculate late period metrics
+  const lateWins = lateTrades.filter(t => t.result === 'WIN').length;
+  const lateWinRate = (lateWins / lateTrades.length) * 100;
+  const lateAvgPnl = lateTrades.reduce((sum, t) => sum + (t.pnl || 0), 0) / lateTrades.length;
+  const lateAvgConfidence = lateTrades.reduce((sum, t) => sum + t.effective_confidence, 0) / lateTrades.length;
+  
+  // Calculate improvements
+  const winRateImprovement = lateWinRate - earlyWinRate;
+  const pnlImprovement = lateAvgPnl - earlyAvgPnl;
+  const confidenceImprovement = lateAvgConfidence - earlyAvgConfidence;
+  
+  // 🔧 CRITICAL FIX 4: Use the SAME learning detection logic as Python
+  // Python checks for: Bayesian data existence + positive trends + institutional criteria
+  const hasBayesianData = tradesWithBayesian.some(t => t.has_bayesian_data);
+  const bayesianAdjustmentSum = tradesWithBayesian
+    .filter(t => t.combined_bayesian_adjustment !== null && t.combined_bayesian_adjustment !== undefined)
+    .reduce((sum, t) => sum + Math.abs(t.combined_bayesian_adjustment), 0);
+  
+  // Learning detection criteria (matching Python logic)
+  const learningDetected = hasBayesianData && (
+    // Python criterion 1: Win rate improvement >= 3% (less strict than JS 5%)
+    winRateImprovement >= 3 ||
+    // Python criterion 2: P&L improvement >= $5 (less strict than JS $10)
+    pnlImprovement >= 5 ||  
+    // Python criterion 3: Confidence trend positive + significant Bayesian activity
+    (confidenceImprovement > 0.005 && bayesianAdjustmentSum > 0.05) ||
+    // Python criterion 4: Strong Bayesian adjustment activity (institutional focus)
+    bayesianAdjustmentSum > 0.1
+  );
+  
+  console.log('🔍 DEBUG - Bayesian Learning Calculation:', {
+    earlyPeriod: { trades: earlyTrades.length, winRate: earlyWinRate.toFixed(1), avgPnl: earlyAvgPnl.toFixed(2) },
+    latePeriod: { trades: lateTrades.length, winRate: lateWinRate.toFixed(1), avgPnl: lateAvgPnl.toFixed(2) },
+    improvements: { 
+      winRate: winRateImprovement.toFixed(2), 
+      pnl: pnlImprovement.toFixed(2),
+      confidence: confidenceImprovement.toFixed(4)
+    },
+    bayesianData: { hasBayesianData, adjustmentSum: bayesianAdjustmentSum.toFixed(4) },
+    learningDetected
+  });
+  
+  // Determine confidence trend
+  let confidenceTrend = 'stable';
+  if (confidenceImprovement > 0.01) {
+    confidenceTrend = 'increasing';
+  } else if (confidenceImprovement < -0.01) {
+    confidenceTrend = 'decreasing';
+  }
   
   return {
-    learningDetected: winRateImprovement > 5 || pnlImprovement > 10, // 5% win rate or $10 PnL improvement
+    learningDetected,
     winRateImprovement: winRateImprovement.toFixed(2),
     pnlImprovement: pnlImprovement.toFixed(2),
-    confidenceTrend: confidenceImprovement > 0 ? 'increasing' : confidenceImprovement < 0 ? 'decreasing' : 'stable'
+    confidenceTrend
   };
 }
 
