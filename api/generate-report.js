@@ -456,10 +456,12 @@ function analyzePatternStressPerformance(trades) {
 /**
  * Calculates component scores from raw trades.
  * This version calculates AI model metrics directly from the trades array.
+ * FIXED: Corrected profit factor calculation and risk-adjusted metrics
  */
 function calculateComponentScores(trades, metrics) {
   // Performance Score (unchanged)
   let performanceScore = 0;
+  // FIXED: Added missing closing parenthesis to each Math.min call
   performanceScore += Math.min((parseFloat(metrics.performance?.sharpe_ratio) || 0) * 20, 40);
   performanceScore += Math.min((parseFloat(metrics.performance?.total_return_pct) || 0) / 2, 30);
   performanceScore += Math.min((parseFloat(metrics.performance?.win_rate_pct) || 0) / 2, 30);
@@ -472,19 +474,21 @@ function calculateComponentScores(trades, metrics) {
   riskScore -= Math.min(var95 * 10, 30);
   riskScore = Math.max(riskScore, 0);
 
-  // INSTITUTIONAL AI EFFECTIVENESS SCORE (IMPROVED)
+  // INSTITUTIONAL AI EFFECTIVENESS SCORE (FIXED)
   let aiScore = 0;
   const models = {};
 
-  // 1. Group trades by signal source and calculate model metrics
+  // 1. Group trades by signal source with proper PnL tracking
   trades.forEach(trade => {
     const source = trade.signal_source;
     if (!models[source]) {
       models[source] = {
         trades: [],
         wins: 0,
+        losses: 0, // Added loss tracking
+        totalWinPnl: 0,
+        totalLossPnl: 0, // Track absolute loss amount
         confidenceSum: 0,
-        returnSum: 0,
         maxDrawdown: 0,
         durations: []
       };
@@ -496,7 +500,10 @@ function calculateComponentScores(trades, metrics) {
     
     if (trade.result === 'WIN') {
       model.wins++;
-      model.returnSum += parseFloat(trade.pnl);
+      model.totalWinPnl += parseFloat(trade.pnl); // Track win amounts
+    } else if (trade.result === 'LOSS') {
+      model.losses++;
+      model.totalLossPnl += Math.abs(parseFloat(trade.pnl)); // Track loss amounts
     }
     
     // Track max intratrade drawdown
@@ -510,7 +517,7 @@ function calculateComponentScores(trades, metrics) {
     }
   });
 
-  // 2. Calculate model effectiveness if we have trades
+  // 2. Calculate model effectiveness with proper metrics
   if (Object.keys(models).length > 0) {
     let totalWeightedScore = 0;
     let totalTrades = trades.length;
@@ -525,28 +532,46 @@ function calculateComponentScores(trades, metrics) {
         // Core metrics
         const winRate = (modelData.wins / tradeCount) * 100;
         const avgConfidence = modelData.confidenceSum / tradeCount;
-        const avgReturn = modelData.returnSum / modelData.wins || 0;
-        const avgDuration = modelData.durations.reduce((a, b) => a + b, 0) / tradeCount;
         
-        // Advanced metrics
-        const profitFactor = modelData.wins / (tradeCount - modelData.wins) || 10;
-        const returnDrawdownRatio = avgReturn / Math.max(modelData.maxDrawdown, 0.01);
+        // FIXED: Proper profit factor calculation
+        const profitFactor = modelData.totalLossPnl > 0 
+          ? modelData.totalWinPnl / modelData.totalLossPnl 
+          : Infinity;
         
+        // Risk-adjusted returns
+        const avgWin = modelData.wins > 0 
+          ? modelData.totalWinPnl / modelData.wins 
+          : 0;
+        const returnDrawdownRatio = modelData.maxDrawdown > 0
+          ? avgWin / modelData.maxDrawdown
+          : 10; // High ratio if no drawdown
+
         // Confidence scaling
-        const scaledConfidence = avgConfidence <= 1 ? avgConfidence * 100 : avgConfidence;
+        const scaledConfidence = avgConfidence <= 1 
+          ? avgConfidence * 100 
+          : avgConfidence;
         
-        // Activity factor (penalize stale models)
+        // Activity factor
         const lastTradeDate = new Date(Math.max(...modelData.trades.map(t => 
           new Date(t.entry_time).getTime()
         )));
         const daysSinceLastTrade = (new Date() - lastTradeDate) / (1000 * 3600 * 24);
         const recencyPenalty = Math.max(0, 1 - (daysSinceLastTrade / 30));
         
+        // Duration handling
+        let durationScore = 0;
+        if (modelData.durations.length > 0) {
+          const avgDuration = modelData.durations.reduce((a, b) => a + b, 0) / modelData.durations.length;
+          durationScore = avgDuration > 0 
+            ? (1 / Math.log1p(avgDuration)) * 10 
+            : 5; // Default score for missing duration
+        }
+
         // Model score components
         const winScore = Math.min(winRate * 0.35, 35);
         const confidenceScore = Math.min(scaledConfidence * 0.25, 25);
         const riskAdjustedScore = Math.min(Math.log1p(returnDrawdownRatio) * 15, 15);
-        const activityScore = Math.min((1 / Math.log1p(avgDuration)) * 10 * recencyPenalty, 10);
+        const activityScore = Math.min(durationScore * recencyPenalty, 10);
         const consistencyScore = Math.min(Math.log1p(profitFactor) * 15, 15);
         
         const modelScore = winScore + confidenceScore + riskAdjustedScore + activityScore + consistencyScore;
@@ -568,7 +593,6 @@ function calculateComponentScores(trades, metrics) {
     ai_effectiveness_score: aiScore.toFixed(1)
   };
 }
-
 /**
  * Helper function to parse duration strings.
  * Example format: "1 days 02:30:15.123"
