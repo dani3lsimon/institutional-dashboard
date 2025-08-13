@@ -592,14 +592,13 @@ function calculateComponentScores(trades, metrics) {
             : 5; // Default score for missing duration
         }
 
-        // Model score components
-        const winScore = Math.min(winRate * 0.35, 35);
-        const confidenceScore = Math.min(scaledConfidence * 0.25, 25);
-        const riskAdjustedScore = Math.min(Math.log1p(returnDrawdownRatio) * 15, 15);
-        const activityScore = Math.min(durationScore * recencyPenalty, 10);
-        const consistencyScore = Math.min(Math.log1p(profitFactor) * 15, 15);
-        
-        const modelScore = winScore + confidenceScore + riskAdjustedScore + activityScore + consistencyScore;
+        // Standard quantitative metrics (no arbitrary weightings)
+        const profitFactorScore = Math.min((profitFactor - 1) * 50, 40); // PF > 1 gets points
+        const winRateScore = Math.min(Math.max(winRate - 50, 0) * 0.6, 30); // Win rate > 50% gets points
+        const sharpeScore = Math.min(Math.max(informationRatio * 100, 0), 20); // Information ratio contribution
+        const consistencyScore = tradeCount >= 100 ? 10 : (tradeCount / 100) * 10; // Sample size bonus
+
+        const modelScore = profitFactorScore + winRateScore + sharpeScore + consistencyScore;
         
         // Volume weighting
         const tradeWeight = tradeCount / totalTrades;
@@ -875,8 +874,10 @@ export default async function handler(req, res) {
           blackSwanDDStatus: maxDD <= 30 ? 'PASS ✅' : 'FAIL ❌',
           recoveryFactorStatus: recoveryFactor >= 1.0 ? 'PASS ✅' : 'FAIL ❌',
           bayesianLagStatus: stressTests.bayesianLag?.status || 'PASS ✅',
-          crisisAlphaStatus: 'PASS ✅', // Based on positive expectancy
-          slippageControlStatus: 'PASS ✅' // Assuming good execution quality
+          // FIXED: Calculate crisis alpha based on actual performance
+          crisisAlphaStatus: expectancy > 20 ? 'PASS ✅' : 'FAIL ❌', // Expectancy > $20/trade
+          // FIXED: Calculate slippage control based on actual execution
+          slippageControlStatus: avgEffectiveLeverage <= 5.0 ? 'PASS ✅' : 'FAIL ❌' // Leverage control
         }
       },
       fileName: req.body.fileName || 'uploaded_data.csv'

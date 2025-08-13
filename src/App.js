@@ -705,29 +705,21 @@ const InstitutionalGradeTab = ({ reportData }) => {
     };
 
     return (
-        <div className="space-y-6">
-            {/* Institutional Rating Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-lg text-white">
-                <h2 className="text-2xl font-bold mb-4">🎯 INSTITUTIONAL RATING</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                        <div className="text-3xl font-bold">{getGrade(overallScore)}</div>
-                        <div className="text-sm opacity-90">Grade</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-3xl font-bold">{overallScore}/100</div>
-                        <div className="text-sm opacity-90">Overall Score</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl">{overallScore >= 70 ? '✅ YES' : '❌ NO'}</div>
-                        <div className="text-sm opacity-90">Meets Standards</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-2xl">{overallScore >= 70 ? '✅ YES' : '❌ NO'}</div>
-                        <div className="text-sm opacity-90">Production Ready</div>
-                    </div>
+    <div className="space-y-6">
+        {/* Institutional Rating Header */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-6 rounded-lg text-white">
+            <h2 className="text-2xl font-bold mb-4">🎯 INSTITUTIONAL RATING</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="text-center">
+                    <div className="text-3xl font-bold">{getGrade(overallScore)}</div>
+                    <div className="text-sm opacity-90">Composite Grade</div>
+                </div>
+                <div className="text-center">
+                    <div className="text-3xl font-bold">{overallScore}/100</div>
+                    <div className="text-sm opacity-90">Overall Score</div>
                 </div>
             </div>
+        </div>
 
             {/* Stress Test Results */}
             <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
@@ -988,6 +980,22 @@ const InstitutionalGradeTab = ({ reportData }) => {
                     </div>
                 </div>
             )}
+
+
+            {/* 🔥 ADD THE METHODOLOGY SECTION HERE - RIGHT AFTER THE COMPONENT SCORES */}
+            <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700">
+                <h3 className="text-xl font-bold text-slate-400 mb-4">📋 SCORING METHODOLOGY</h3>
+                <div className="text-sm text-slate-300 space-y-2">
+                    <p><strong>Performance Score (40% weight):</strong> Sharpe Ratio, Total Return, Win Rate</p>
+                    <p><strong>Risk Score (30% weight):</strong> Maximum Drawdown, VaR(95%), Risk-adjusted metrics</p>
+                    <p><strong>AI Effectiveness (30% weight):</strong> Profit Factor, Win Rate above 50%, Information Ratio, Sample Size</p>
+                    <p className="pt-2 border-t border-slate-600 text-xs text-slate-400">
+                        All calculations based on uploaded trade data. No subjective adjustments applied.
+                    </p>
+                </div>
+            </div>
+
+            
         </div>
     );
 };
