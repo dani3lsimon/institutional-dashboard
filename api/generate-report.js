@@ -595,7 +595,7 @@ function calculateComponentScores(trades, metrics) {
         // Standard quantitative metrics (no arbitrary weightings)
         const profitFactorScore = Math.min((profitFactor - 1) * 50, 40); // PF > 1 gets points
         const winRateScore = Math.min(Math.max(winRate - 50, 0) * 0.6, 30); // Win rate > 50% gets points
-        const sharpeScore = Math.min(Math.max(informationRatio * 100, 0), 20); // Information ratio contribution
+        const sharpeScore = Math.min(Math.max((parseFloat(metrics.performance?.sharpe_ratio) || 0) * 10, 0), 20); // ✅ Use Sharpe ratio instead
         const consistencyScore = tradeCount >= 100 ? 10 : (tradeCount / 100) * 10; // Sample size bonus
 
         const modelScore = profitFactorScore + winRateScore + sharpeScore + consistencyScore;
