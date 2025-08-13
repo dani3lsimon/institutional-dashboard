@@ -54,6 +54,21 @@ function getSignalSourceAnalysis(trades) {
     }))
     .sort((a, b) => parseFloat(b.totalPnL) - parseFloat(a.totalPnL));
 }
+// 🔥 ADD THIS FUNCTION HERE (after getSignalSourceAnalysis)
+function detectStrategy(trades) {
+  const signalSources = [...new Set(trades.map(trade => trade.signal_source))];
+  
+  if (signalSources.length === 1) {
+    const source = signalSources[0].toUpperCase();
+    return `Single AI (${source})`;
+  } else if (signalSources.length === 2) {
+    return 'Dual AI Ensemble';
+  } else if (signalSources.length > 2) {
+    return 'Multi-AI Ensemble';
+  } else {
+    return 'Unknown Strategy';
+  }
+}
 
 // === NEW ENHANCED INSTITUTIONAL METRICS FUNCTIONS ===
 
@@ -765,14 +780,16 @@ export default async function handler(req, res) {
     const avgEffectiveLeverage = effectiveLeverages.length > 0 ? effectiveLeverages.reduce((sum, v) => sum + v, 0) / effectiveLeverages.length : 0;
 
     const resultsJson = {
-      chartData, temporalData,
+      chartData, 
+      temporalData,
+      individualTrades: trades, // 🔥 ADD THIS LINE
       headerData: {
-          asset: trades[0]?.symbol || 'N/A',
-          strategy: 'Multi-AI Ensemble',
-          startDate: firstTradeDate.toLocaleDateString(),
-          endDate: lastTradeDate.toLocaleDateString(),
-          totalTrades: trades.length,
-          generatedDate: new Date().toLocaleDateString()
+      asset: trades[0]?.symbol || 'N/A',
+      strategy: detectStrategy(trades), // 🔥 CHANGE THIS LINE
+      startDate: firstTradeDate.toLocaleDateString(),
+      endDate: lastTradeDate.toLocaleDateString(),
+      totalTrades: trades.length,
+      generatedDate: new Date().toLocaleDateString()
       },
       metrics: { 
           totalReturn: formatMetric(totalReturn), 
