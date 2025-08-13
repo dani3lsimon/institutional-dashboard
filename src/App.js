@@ -101,15 +101,26 @@ function ResultsPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('Overview');
-
+    const [individualTrades, setIndividualTrades] = useState([]); //
     useEffect(() => {
         const fetchReport = async () => {
             if (!id) return;
             try {
                 const { data, error } = await supabase.from('results').select('data').eq('id', id).single();
                 if (error) throw error;
-                if (data) { setReportData(data.data); } 
-                else { throw new Error("Report not found."); }
+                if (data && data.data) {
+    setReportData(data.data);
+    
+                // 🔥 ADD THIS - Extract individual trades
+                if (data.data.individualTrades && Array.isArray(data.data.individualTrades)) {
+                    setIndividualTrades(data.data.individualTrades);
+                    console.log('Found individual trades:', data.data.individualTrades.length);
+                } else {
+                    console.log('No individual trades found in data');
+                }
+            } else {
+                throw new Error("Report not found.");
+            } 
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -129,7 +140,7 @@ function ResultsPage() {
         return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">Report data not available.</div>;
     }
 
-    const tabs = ['Overview', 'Portfolio Equity', 'Performance', 'Risk Analysis', 'Trade Analysis', 'Institutional Grade'];
+    const tabs = ['Overview', 'Individual Trades', 'Portfolio Equity', 'Performance', 'Risk Analysis', 'Trade Analysis', 'Institutional Grade'];
     const { headerData } = reportData;
 
     return (
@@ -155,6 +166,7 @@ function ResultsPage() {
             </div>
             <div className="animate-fade-in">
                 {activeTab === 'Overview' && <OverviewTab reportData={reportData} />}
+                {activeTab === 'Individual Trades' && <IndividualTradesTab trades={individualTrades} />}
                 {activeTab === 'Portfolio Equity' && <PortfolioEquityTab reportData={reportData} />}
                 {activeTab === 'Performance' && <PerformanceTab reportData={reportData} />}
                 {activeTab === 'Risk Analysis' && <RiskAnalysisTab reportData={reportData} />}
@@ -176,6 +188,239 @@ export default function App() {
 }
 
 // --- Tab Components ---
+
+const IndividualTradesTab = ({ trades }) => {
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const [filterResult, setFilterResult] = useState('ALL');
+    const [currentPage, setCurrentPage] = useState(1);
+    const tradesPerPage = 25;
+
+    if (!trades || trades.length === 0) {
+        return (
+            <div className="text-center text-slate-400 py-12">
+                <p>No individual trade data available.</p>
+                <p className="text-sm mt-2">Upload your CSV file again to see individual trades.</p>
+            </div>
+        );
+    }
+
+    // Filter trades
+    const filteredTrades = trades.filter(trade => 
+        filterResult === 'ALL' || trade.result === filterResult
+    );
+
+    // Sort trades
+    const sortedTrades = [...filteredTrades].sort((a, b) => {
+        if (!sortConfig.key) return 0;
+        
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+            return sortConfig.direction === 'asc' 
+                ? aValue.localeCompare(bValue)
+                : bValue.localeCompare(aValue);
+        }
+        
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // Paginate trades
+    const indexOfLastTrade = currentPage * tradesPerPage;
+    const indexOfFirstTrade = indexOfLastTrade - tradesPerPage;
+    const currentTrades = sortedTrades.slice(indexOfFirstTrade, indexOfLastTrade);
+    const totalPages = Math.ceil(sortedTrades.length / tradesPerPage);
+
+    const handleSort = (key) => {
+        setSortConfig({
+            key,
+            direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+        });
+    };
+
+    const formatDuration = (duration) => {
+        if (!duration) return 'N/A';
+        return duration.replace(/(\d+) days?/, '$1d')
+                      .replace(/(\d+) hours?/, '$1h')
+                      .replace(/(\d+) minutes?/, '$1m')
+                      .replace(/(\d+):(\d+):(\d+)/, '$1h $2m');
+    };
+
+    const formatDateTime = (dateString) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+    };
+
+    const SortIcon = ({ column }) => {
+        if (sortConfig.key !== column) return <span className="text-gray-400 ml-1">↕</span>;
+        return <span className="text-blue-400 ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
+
+    // Calculate statistics
+    const winningTrades = trades.filter(t => t.result === 'WIN');
+    const losingTrades = trades.filter(t => t.result === 'LOSS');
+    const totalPnL = trades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
+
+    return (
+        <div className="space-y-6">
+            {/* Trade Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Total Trades</h3>
+                    <p className="text-2xl font-bold text-blue-400">{trades.length}</p>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Winning Trades</h3>
+                    <p className="text-2xl font-bold text-green-400">
+                        {winningTrades.length}
+                        <span className="text-sm text-slate-400 ml-2">
+                            ({((winningTrades.length / trades.length) * 100).toFixed(1)}%)
+                        </span>
+                    </p>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Losing Trades</h3>
+                    <p className="text-2xl font-bold text-red-400">
+                        {losingTrades.length}
+                        <span className="text-sm text-slate-400 ml-2">
+                            ({((losingTrades.length / trades.length) * 100).toFixed(1)}%)
+                        </span>
+                    </p>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Net P&L</h3>
+                    <p className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${totalPnL.toFixed(2)}
+                    </p>
+                </div>
+            </div>
+
+            {/* Filters and Controls */}
+            <div className="flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex gap-2">
+                    <select 
+                        value={filterResult} 
+                        onChange={(e) => {
+                            setFilterResult(e.target.value);
+                            setCurrentPage(1);
+                        }}
+                        className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                    >
+                        <option value="ALL">All Trades</option>
+                        <option value="WIN">Wins Only</option>
+                        <option value="LOSS">Losses Only</option>
+                    </select>
+                </div>
+                <div className="text-sm text-slate-400">
+                    Showing {indexOfFirstTrade + 1}-{Math.min(indexOfLastTrade, sortedTrades.length)} of {sortedTrades.length} trades
+                </div>
+            </div>
+
+            {/* Trades Table */}
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead className="bg-slate-700/50">
+                            <tr>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('trade_id')}>
+                                    Trade ID <SortIcon column="trade_id" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('entry_time')}>
+                                    Entry Time <SortIcon column="entry_time" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('direction')}>
+                                    Dir <SortIcon column="direction" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('entry_price')}>
+                                    Entry <SortIcon column="entry_price" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('exit_price')}>
+                                    Exit <SortIcon column="exit_price" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('stop_loss')}>
+                                    SL <SortIcon column="stop_loss" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('take_profit')}>
+                                    TP <SortIcon column="take_profit" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('duration')}>
+                                    Duration <SortIcon column="duration" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('result')}>
+                                    Result <SortIcon column="result" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('pnl')}>
+                                    P&L <SortIcon column="pnl" />
+                                </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('pattern')}>
+                                    Pattern <SortIcon column="pattern" />
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {currentTrades.map((trade, index) => (
+                                <tr key={trade.trade_id || index} className="border-t border-slate-700 hover:bg-slate-700/30">
+                                    <td className="px-3 py-2 font-mono text-xs">
+                                        {(trade.trade_id || '').substring(3, 15)}...
+                                    </td>
+                                    <td className="px-3 py-2">{formatDateTime(trade.entry_time)}</td>
+                                    <td className="px-3 py-2">
+                                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                            trade.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                        }`}>
+                                            {trade.direction}
+                                        </span>
+                                    </td>
+                                    <td className="px-3 py-2">{parseFloat(trade.entry_price || 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2">{parseFloat(trade.exit_price || 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-red-400">{parseFloat(trade.stop_loss || 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-green-400">{parseFloat(trade.take_profit || 0).toFixed(2)}</td>
+                                    <td className="px-3 py-2">{formatDuration(trade.duration)}</td>
+                                    <td className="px-3 py-2">
+                                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                            trade.result === 'WIN' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                        }`}>
+                                            {trade.result}
+                                        </span>
+                                    </td>
+                                    <td className={`px-3 py-2 font-medium ${parseFloat(trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        ${parseFloat(trade.pnl || 0).toFixed(2)}
+                                    </td>
+                                    <td className="px-3 py-2 text-xs text-slate-400">{trade.pattern || 'N/A'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex justify-between items-center">
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600"
+                    >
+                        Previous
+                    </button>
+                    <span className="text-slate-400">Page {currentPage} of {totalPages}</span>
+                    <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600"
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const OverviewTab = ({ reportData }) => {
     const { metrics, institutionalMetrics, chartData } = reportData;
     return (
