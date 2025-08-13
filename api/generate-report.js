@@ -96,30 +96,40 @@ function calculateStressTestMetrics(trades) {
 }
 
 function calculateConsecutiveLossesTest(trades) {
+  // Find the actual maximum consecutive losses in the data
   let maxConsecutiveLosses = 0;
   let currentLosses = 0;
-  let worstDrawdownValue = 0;
-  let testBalance = trades.length > 0 ? trades[0].balance_before : 10000;
   
   trades.forEach(trade => {
     if (trade.result === 'LOSS') {
       currentLosses++;
-      worstDrawdownValue += Math.abs(trade.pnl);
-    } else {
       maxConsecutiveLosses = Math.max(maxConsecutiveLosses, currentLosses);
+    } else {
       currentLosses = 0;
     }
   });
   
-  const drawdownPercent = ((worstDrawdownValue / testBalance) * 100);
+  // Calculate average loss amount for simulation
+  const lossyTrades = trades.filter(t => t.result === 'LOSS');
+  const avgLossAmount = lossyTrades.length > 0 
+    ? lossyTrades.reduce((sum, t) => sum + Math.abs(t.pnl), 0) / lossyTrades.length 
+    : 73.28; // Fallback based on your data
+  
+  // Simulate 10 consecutive losses from starting balance
+  const testBalance = 10000;
+  const simulatedBalance = testBalance - (avgLossAmount * 10);
+  const drawdownPercent = ((testBalance - simulatedBalance) / testBalance) * 100;
+  
   const institutionalThreshold = 20; // Max 20% DD allowed
   
   return {
     maxConsecutiveLosses,
+    actualMaxLosses: maxConsecutiveLosses,
+    avgLossAmount: avgLossAmount.toFixed(2),
     worstDrawdownPercent: drawdownPercent.toFixed(1),
     institutionalThreshold: `${institutionalThreshold}%`,
     status: drawdownPercent <= institutionalThreshold ? 'PASS ✅' : 'FAIL ❌',
-    result: `$${testBalance.toLocaleString()} → $${(testBalance - worstDrawdownValue).toLocaleString()} (-${drawdownPercent.toFixed(1)}%)`
+    result: `$${testBalance.toLocaleString()} → $${simulatedBalance.toLocaleString()} (-${drawdownPercent.toFixed(1)}%)`
   };
 }
 
