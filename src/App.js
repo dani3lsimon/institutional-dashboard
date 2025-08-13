@@ -944,10 +944,10 @@ const InstitutionalGradeTab = ({ reportData }) => {
                                 <td className="py-2">{institutionalMetrics.institutionalCertification?.bayesianLagStatus || 'PASS ✅'}</td>
                             </tr>
                             <tr className="border-b border-slate-700">
-                                <td className="py-2">Crisis Alpha</td>
-                                <td className="py-2 font-semibold">+${institutionalMetrics.expectancy}/trade</td>
-                                <td className="py-2">&gt;$200</td>
-                                <td className="py-2">{institutionalMetrics.institutionalCertification?.crisisAlphaStatus || 'PASS ✅'}</td>
+                                <td className="py-2">Information Ratio</td>
+                                <td className="py-2 font-semibold">{institutionalMetrics.informationRatio}</td>
+                                <td className="py-2">&gt;0.5</td>
+                                <td className="py-2">{parseFloat(institutionalMetrics.informationRatio) > 0.5 ? 'PASS ✅' : 'FAIL ❌'}</td>
                             </tr>
                             <tr>
                                 <td className="py-2">Slippage Control</td>

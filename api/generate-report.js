@@ -875,7 +875,7 @@ export default async function handler(req, res) {
           recoveryFactorStatus: recoveryFactor >= 1.0 ? 'PASS ✅' : 'FAIL ❌',
           bayesianLagStatus: stressTests.bayesianLag?.status || 'PASS ✅',
           // FIXED: Calculate crisis alpha based on actual performance
-          crisisAlphaStatus: expectancy > 20 ? 'PASS ✅' : 'FAIL ❌', // Expectancy > $20/trade
+          informationRatioStatus: informationRatio > 0.5 ? 'PASS ✅' : 'FAIL ❌', // 
           // FIXED: Calculate slippage control based on actual execution
           slippageControlStatus: avgEffectiveLeverage <= 5.0 ? 'PASS ✅' : 'FAIL ❌' // Leverage control
         }
