@@ -1,34 +1,115 @@
 import { createClient } from '@supabase/supabase-js';
 
+
+// Function to convert pattern names to initials for privacy
+function convertPatternToInitials(pattern) {
+    if (!pattern || pattern === 'Unknown' || pattern === 'N/A') return 'UNK';
+    
+    // Split by common delimiters and take first letter of each word
+    const words = pattern.split(/[\s_-]+/).filter(word => word.length > 0);
+    const initials = words.map(word => word[0].toUpperCase()).join('');
+    
+    // Limit to 4 characters max for better display
+    return initials.substring(0, 4);
+}
+
+// Function to process trades and add trade numbers + convert patterns
+function processTradesForDashboard(trades) {
+    return trades.map((trade, index) => ({
+        ...trade,
+        // Add trade number for easy tracking (1-based index)
+        trade_number: index + 1,
+        // Convert pattern to initials for privacy
+        pattern_display: convertPatternToInitials(trade.pattern),
+        // Keep original pattern for server-side analysis only
+        pattern_original: trade.pattern,
+        // Ensure we have all required fields
+        signal_source: trade.signal_source || 'Unknown',
+        confidence: parseFloat(trade.confidence || 0),
+        pnl: parseFloat(trade.pnl || 0),
+        entry_time: trade.entry_time,
+        exit_time: trade.exit_time,
+        result: trade.result || 'Unknown'
+    }));
+}
+
+// Enhanced getTopPatterns function to use initials for privacy
+function getTopPatternsWithPrivacy(trades) {
+    const patterns = {};
+    
+    trades.forEach(trade => {
+        // Use initials instead of full pattern name
+        const patternInitials = convertPatternToInitials(trade.pattern);
+        
+        if (!patterns[patternInitials]) {
+            patterns[patternInitials] = { 
+                count: 0, 
+                totalPnL: 0, 
+                wins: 0, 
+                totalConfidence: 0,
+                aiModel: trade.signal_source || 'Unknown' // Track which AI model
+            };
+        }
+        patterns[patternInitials].count++;
+        patterns[patternInitials].totalPnL += trade.pnl;
+        patterns[patternInitials].totalConfidence += trade.confidence;
+        if (trade.result === 'WIN') patterns[patternInitials].wins++;
+    });
+    
+    return Object.entries(patterns)
+        .map(([patternInitials, stats]) => ({
+            pattern: patternInitials, // Now showing initials instead of full names
+            aiModel: stats.aiModel,   // Show which AI model uses this pattern
+            count: stats.count,
+            totalPnL: stats.totalPnL.toFixed(2),
+            winRate: ((stats.wins / stats.count) * 100).toFixed(2),
+            avgConfidence: ((stats.totalConfidence / stats.count) * 100).toFixed(2)
+        }))
+        .sort((a, b) => parseFloat(b.totalPnL) - parseFloat(a.totalPnL))
+        .slice(0, 10); // Show top 10 patterns
+}
+
+
 // Initialize the Supabase client with the SECRET service_role key
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// --- Helper Functions for Advanced Analysis ---
+// Enhanced getTopPatterns function to use initials for privacy
 function getTopPatterns(trades) {
-  const patterns = {};
-  trades.forEach(trade => {
-    const pattern = trade.pattern || 'Unknown';
-    if (!patterns[pattern]) {
-      patterns[pattern] = { count: 0, totalPnL: 0, wins: 0, totalConfidence: 0 };
-    }
-    patterns[pattern].count++;
-    patterns[pattern].totalPnL += trade.pnl;
-    patterns[pattern].totalConfidence += trade.confidence;
-    if (trade.result === 'WIN') patterns[pattern].wins++;
-  });
-  return Object.entries(patterns)
-    .map(([pattern, stats]) => ({
-      pattern,
-      count: stats.count,
-      totalPnL: stats.totalPnL.toFixed(2),
-      winRate: ((stats.wins / stats.count) * 100).toFixed(2),
-      avgConfidence: ((stats.totalConfidence / stats.count) * 100).toFixed(2)
-    }))
-    .sort((a, b) => parseFloat(b.totalPnL) - parseFloat(a.totalPnL))
-    .slice(0, 5);
+    const patterns = {};
+    
+    trades.forEach(trade => {
+        // Use initials instead of full pattern name
+        const patternInitials = convertPatternToInitials(trade.pattern);
+        
+        if (!patterns[patternInitials]) {
+            patterns[patternInitials] = { 
+                count: 0, 
+                totalPnL: 0, 
+                wins: 0, 
+                totalConfidence: 0,
+                aiModel: trade.signal_source || 'Unknown' // Track which AI model
+            };
+        }
+        patterns[patternInitials].count++;
+        patterns[patternInitials].totalPnL += parseFloat(trade.pnl || 0);
+        patterns[patternInitials].totalConfidence += parseFloat(trade.confidence || 0);
+        if (trade.result === 'WIN') patterns[patternInitials].wins++;
+    });
+    
+    return Object.entries(patterns)
+        .map(([patternInitials, stats]) => ({
+            pattern: patternInitials, // Now showing initials instead of full names
+            aiModel: stats.aiModel,   // Show which AI model uses this pattern
+            count: stats.count,
+            totalPnL: stats.totalPnL.toFixed(2),
+            winRate: ((stats.wins / stats.count) * 100).toFixed(2),
+            avgConfidence: ((stats.totalConfidence / stats.count) * 100).toFixed(2)
+        }))
+        .sort((a, b) => parseFloat(b.totalPnL) - parseFloat(a.totalPnL))
+        .slice(0, 10); // Show top 10 patterns
 }
 
 function getSignalSourceAnalysis(trades) {
@@ -925,7 +1006,7 @@ export default async function handler(req, res) {
     const resultsJson = {
       chartData, 
       temporalData,
-      individualTrades: trades, // 🔥 ADD THIS LINE
+      individualTrades: processTradesForDashboard(trades), // 🔥 ADD THIS LINE
       headerData: {
       asset: trades[0]?.symbol || 'N/A',
       strategy: detectStrategy(trades), // 🔥 CHANGE THIS LINE

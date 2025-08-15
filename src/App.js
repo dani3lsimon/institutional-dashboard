@@ -1,3 +1,4 @@
+import AIModelPerformanceChart from './components/AIModelPerformanceChart';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient'; // Make sure you have this file
@@ -140,7 +141,7 @@ function ResultsPage() {
         return <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">Report data not available.</div>;
     }
 
-    const tabs = ['Overview', 'Individual Trades', 'Portfolio Equity', 'Performance', 'Risk Analysis', 'Trade Analysis', 'Institutional Grade'];
+    const tabs = ['Overview', 'Individual Trades', 'AI Model Performance', 'Portfolio Equity', 'Performance', 'Risk Analysis', 'Trade Analysis', 'Institutional Grade'];
     const { headerData } = reportData;
 
     return (
@@ -167,6 +168,7 @@ function ResultsPage() {
             <div className="animate-fade-in">
                 {activeTab === 'Overview' && <OverviewTab reportData={reportData} />}
                 {activeTab === 'Individual Trades' && <IndividualTradesTab trades={individualTrades} />}
+                {activeTab === 'AI Model Performance' && <AIModelPerformanceChart trades={individualTrades} />}
                 {activeTab === 'Portfolio Equity' && <PortfolioEquityTab reportData={reportData} />}
                 {activeTab === 'Performance' && <PerformanceTab reportData={reportData} />}
                 {activeTab === 'Risk Analysis' && <RiskAnalysisTab reportData={reportData} />}
@@ -204,6 +206,69 @@ const IndividualTradesTab = ({ trades }) => {
         );
     }
 
+    // Function to convert pattern names to initials for privacy
+    const getPatternInitials = (pattern) => {
+        if (!pattern || pattern === 'Unknown' || pattern === 'N/A') return 'UNK';
+        
+        // Split by common delimiters and take first letter of each word
+        const words = pattern.split(/[\s_-]+/).filter(word => word.length > 0);
+        const initials = words.map(word => word[0].toUpperCase()).join('');
+        
+        // Limit to 4 characters max for better display
+        return initials.substring(0, 4);
+    };
+
+    // Create a mapping of initials back to AI models for internal tracking
+    const patternMapping = {};
+    trades.forEach(trade => {
+        const original = trade.pattern || 'Unknown';
+        const initials = getPatternInitials(original);
+        if (!patternMapping[initials]) {
+            patternMapping[initials] = {
+                original: original,
+                aiModel: trade.signal_source || 'Unknown',
+                count: 0
+            };
+        }
+        patternMapping[initials].count++;
+    });
+
+    // Helper functions
+    const formatDateTime = (dateTime) => {
+        if (!dateTime) return 'N/A';
+        try {
+            const date = new Date(dateTime);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+            });
+        } catch {
+            return dateTime;
+        }
+    };
+
+    const formatDuration = (duration) => {
+        if (!duration) return 'N/A';
+        // Handle duration format like "1 days 02:30:15.123"
+        if (duration.includes('days')) {
+            const parts = duration.split(' ');
+            const days = parseInt(parts[0]) || 0;
+            const timePart = parts[2] || '';
+            const timeComponents = timePart.split(':');
+            if (timeComponents.length >= 2) {
+                const hours = parseInt(timeComponents[0]) || 0;
+                const minutes = parseInt(timeComponents[1]) || 0;
+                if (days > 0) {
+                    return `${days}d ${hours}h ${minutes}m`;
+                } else {
+                    return `${hours}h ${minutes}m`;
+                }
+            }
+        }
+        return duration;
+    };
+
     // Filter trades
     const filteredTrades = trades.filter(trade => 
         filterResult === 'ALL' || trade.result === filterResult
@@ -227,129 +292,77 @@ const IndividualTradesTab = ({ trades }) => {
         return 0;
     });
 
-    // Paginate trades
-    const indexOfLastTrade = currentPage * tradesPerPage;
-    const indexOfFirstTrade = indexOfLastTrade - tradesPerPage;
-    const currentTrades = sortedTrades.slice(indexOfFirstTrade, indexOfLastTrade);
+    // Pagination
     const totalPages = Math.ceil(sortedTrades.length / tradesPerPage);
+    const currentTrades = sortedTrades.slice(
+        (currentPage - 1) * tradesPerPage,
+        currentPage * tradesPerPage
+    );
 
     const handleSort = (key) => {
-        setSortConfig({
-            key,
-            direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
-        });
-    };
-
-    const formatDuration = (duration) => {
-        if (!duration) return 'N/A';
-        return duration.replace(/(\d+) days?/, '$1d')
-                      .replace(/(\d+) hours?/, '$1h')
-                      .replace(/(\d+) minutes?/, '$1m')
-                      .replace(/(\d+):(\d+):(\d+)/, '$1h $2m');
-    };
-
-    const formatDateTime = (dateString) => {
-        if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
     };
 
     const SortIcon = ({ column }) => {
-        if (sortConfig.key !== column) return <span className="text-gray-400 ml-1">↕</span>;
-        return <span className="text-blue-400 ml-1">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+        if (sortConfig.key !== column) {
+            return <span className="text-slate-500 ml-1">↕</span>;
+        }
+        return sortConfig.direction === 'asc' 
+            ? <span className="text-blue-400 ml-1">↑</span>
+            : <span className="text-blue-400 ml-1">↓</span>;
     };
 
-    // Calculate statistics
-    const winningTrades = trades.filter(t => t.result === 'WIN');
-    const losingTrades = trades.filter(t => t.result === 'LOSS');
-    const totalPnL = trades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
-
     return (
-        <div className="space-y-6">
-            
-            {/* Trade Statistics Cards - EXPANDED */}
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Total Trades</h3>
-                    <p className="text-2xl font-bold text-blue-400">{trades.length}</p>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Winning Trades</h3>
-                    <p className="text-2xl font-bold text-green-400">
-                        {winningTrades.length}
-                        <span className="text-sm text-slate-400 ml-2">
-                            ({((winningTrades.length / trades.length) * 100).toFixed(1)}%)
-                        </span>
-                    </p>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Losing Trades</h3>
-                    <p className="text-2xl font-bold text-red-400">
-                        {losingTrades.length}
-                        <span className="text-sm text-slate-400 ml-2">
-                            ({((losingTrades.length / trades.length) * 100).toFixed(1)}%)
-                        </span>
-                    </p>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Avg Trades/Day</h3>
-                    <p className="text-2xl font-bold text-purple-400">
-                        {(() => {
-                            if (trades.length === 0) return '0';
-                            const firstDate = new Date(trades[0].entry_time);
-                            const lastDate = new Date(trades[trades.length - 1].entry_time);
-                            const daysDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24) + 1;
-                            return (trades.length / daysDiff).toFixed(1);
-                        })()}
-                    </p>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Avg Trades/Week</h3>
-                    <p className="text-2xl font-bold text-cyan-400">
-                        {(() => {
-                            if (trades.length === 0) return '0';
-                            const firstDate = new Date(trades[0].entry_time);
-                            const lastDate = new Date(trades[trades.length - 1].entry_time);
-                            const weeksDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24 * 7) + 1;
-                            return (trades.length / weeksDiff).toFixed(1);
-                        })()}
-                    </p>
-                </div>
-                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Net P&L/Trade</h3>
-                    <p className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        ${(totalPnL / trades.length).toFixed(2)}
-                    </p>
-                </div>
-            </div>
-
-            {/* Filters and Controls */}
-            <div className="flex flex-wrap gap-4 items-center justify-between">
-                <div className="flex gap-2">
+        <div className="space-y-4">
+            {/* Filter Controls */}
+            <div className="flex flex-wrap gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                    <label className="text-slate-400 text-sm">Filter by Result:</label>
                     <select 
                         value={filterResult} 
                         onChange={(e) => {
                             setFilterResult(e.target.value);
                             setCurrentPage(1);
                         }}
-                        className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
+                        className="bg-slate-700 text-white px-3 py-1 rounded border border-slate-600 text-sm"
                     >
                         <option value="ALL">All Trades</option>
                         <option value="WIN">Wins Only</option>
                         <option value="LOSS">Losses Only</option>
                     </select>
                 </div>
-                <div className="text-sm text-slate-400">
-                    Showing {indexOfFirstTrade + 1}-{Math.min(indexOfLastTrade, sortedTrades.length)} of {sortedTrades.length} trades
+                <div className="text-slate-400 text-sm flex items-center">
+                    Showing {currentTrades.length} of {sortedTrades.length} trades
+                </div>
+            </div>
+
+            {/* Pattern Mapping Reference - Only visible to you, not investors */}
+            <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-600 mb-4">
+                <h4 className="text-sm font-semibold text-blue-400 mb-2">Pattern Codes (Internal Reference):</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-xs">
+                    {Object.entries(patternMapping).map(([initials, data]) => (
+                        <div key={initials} className="bg-slate-700/50 px-2 py-1 rounded">
+                            <span className="text-cyan-400 font-bold">{initials}</span>
+                            <span className="text-slate-400 ml-1">({data.count})</span>
+                            <div className="text-xs text-slate-500">{data.aiModel}</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
             {/* Trades Table */}
             <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-sm">
                         <thead className="bg-slate-700/50">
-                            <tr>
+                            <tr className="text-slate-300">
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('trade_number')}>
+                                    # <SortIcon column="trade_number" />
+                                </th>
                                 <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('trade_id')}>
                                     Trade ID <SortIcon column="trade_id" />
                                 </th>
@@ -383,40 +396,62 @@ const IndividualTradesTab = ({ trades }) => {
                                 <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('pattern')}>
                                     Pattern <SortIcon column="pattern" />
                                 </th>
+                                <th className="px-3 py-2 text-left cursor-pointer hover:bg-slate-600/50" onClick={() => handleSort('signal_source')}>
+                                    AI Model <SortIcon column="signal_source" />
+                                </th>
                             </tr>
                         </thead>
                         <tbody>
-                            {currentTrades.map((trade, index) => (
-                                <tr key={trade.trade_id || index} className="border-t border-slate-700 hover:bg-slate-700/30">
-                                    <td className="px-3 py-2 font-mono text-xs">
-                                        {(trade.trade_id || '').substring(3, 15)}...
-                                    </td>
-                                    <td className="px-3 py-2">{formatDateTime(trade.entry_time)}</td>
-                                    <td className="px-3 py-2">
-                                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
-                                            trade.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                                        }`}>
-                                            {trade.direction}
-                                        </span>
-                                    </td>
-                                    <td className="px-3 py-2">{parseFloat(trade.entry_price || 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2">{parseFloat(trade.exit_price || 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2 text-red-400">{parseFloat(trade.stop_loss || 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2 text-green-400">{parseFloat(trade.take_profit || 0).toFixed(2)}</td>
-                                    <td className="px-3 py-2">{formatDuration(trade.duration)}</td>
-                                    <td className="px-3 py-2">
-                                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
-                                            trade.result === 'WIN' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
-                                        }`}>
-                                            {trade.result}
-                                        </span>
-                                    </td>
-                                    <td className={`px-3 py-2 font-medium ${parseFloat(trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        ${parseFloat(trade.pnl || 0).toFixed(2)}
-                                    </td>
-                                    <td className="px-3 py-2 text-xs text-slate-400">{trade.pattern || 'N/A'}</td>
-                                </tr>
-                            ))}
+                            {currentTrades.map((trade, index) => {
+                                // Calculate actual trade number from original dataset
+                                const originalIndex = trades.findIndex(t => t.trade_id === trade.trade_id);
+                                const tradeNumber = originalIndex + 1;
+                                
+                                return (
+                                    <tr key={trade.trade_id || index} className="border-t border-slate-700 hover:bg-slate-700/30">
+                                        <td className="px-3 py-2 font-bold text-blue-400">
+                                            {tradeNumber}
+                                        </td>
+                                        <td className="px-3 py-2 font-mono text-xs">
+                                            {(trade.trade_id || '').length > 15 
+                                                ? (trade.trade_id || '').substring(0, 12) + '...'
+                                                : trade.trade_id || 'N/A'
+                                            }
+                                        </td>
+                                        <td className="px-3 py-2 text-xs">{formatDateTime(trade.entry_time)}</td>
+                                        <td className="px-3 py-2">
+                                            <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                                trade.direction === 'BUY' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                            }`}>
+                                                {trade.direction}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2">{parseFloat(trade.entry_price || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-2">{parseFloat(trade.exit_price || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-red-400">{parseFloat(trade.stop_loss || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-green-400">{parseFloat(trade.take_profit || 0).toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-xs">{formatDuration(trade.duration)}</td>
+                                        <td className="px-3 py-2">
+                                            <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                                                trade.result === 'WIN' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'
+                                            }`}>
+                                                {trade.result}
+                                            </span>
+                                        </td>
+                                        <td className={`px-3 py-2 font-medium ${parseFloat(trade.pnl || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            ${parseFloat(trade.pnl || 0).toFixed(2)}
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <span className="bg-cyan-900/50 text-cyan-400 px-1 py-0.5 rounded text-xs font-bold">
+                                                {getPatternInitials(trade.pattern)}
+                                            </span>
+                                        </td>
+                                        <td className="px-3 py-2 text-xs text-slate-300">
+                                            {trade.signal_source || 'Unknown'}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -424,19 +459,34 @@ const IndividualTradesTab = ({ trades }) => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center mt-4">
                     <button 
                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                         disabled={currentPage === 1}
-                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600"
+                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
                     >
                         Previous
                     </button>
-                    <span className="text-slate-400">Page {currentPage} of {totalPages}</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-slate-400">Page {currentPage} of {totalPages}</span>
+                        <input
+                            type="number"
+                            min="1"
+                            max={totalPages}
+                            value={currentPage}
+                            onChange={(e) => {
+                                const page = parseInt(e.target.value);
+                                if (page >= 1 && page <= totalPages) {
+                                    setCurrentPage(page);
+                                }
+                            }}
+                            className="w-16 px-2 py-1 bg-slate-700 text-white rounded border border-slate-600 text-sm text-center"
+                        />
+                    </div>
                     <button 
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                         disabled={currentPage === totalPages}
-                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600"
+                        className="px-4 py-2 bg-slate-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition-colors"
                     >
                         Next
                     </button>
