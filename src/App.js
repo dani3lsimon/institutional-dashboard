@@ -771,10 +771,10 @@ const InstitutionalGradeTab = ({ reportData }) => {
                                         <td className="py-2">{institutionalMetrics.stressTestResults.consecutiveLossTest?.status || 'PASS ✅'}</td>
                                     </tr>
                                     <tr className="border-b border-slate-700">
-                                        <td className="py-2 font-semibold">Volatility Regime Stability</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.summary || 'N/A'}</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.threshold || 'Positive expectancy in 2/3 regimes'}</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.status || 'PASS ✅'}</td>
+                                        <td className="py-2 font-semibold">Risk-Adjusted Performance</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.riskAdjusted?.summary || 'N/A'}</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.riskAdjusted?.threshold || 'Consistent risk-adjusted performance'}</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.riskAdjusted?.status || 'PASS ✅'}</td>
                                     </tr>
                                     <tr className="border-b border-slate-700">
                                         <td className="py-2 font-semibold">Pattern Decay (20%)</td>
@@ -945,10 +945,10 @@ const InstitutionalGradeTab = ({ reportData }) => {
                                 <td className="py-2">{institutionalMetrics.institutionalCertification?.profitFactorStatus || 'PASS ✅'}</td>
                             </tr>
                             <tr className="border-b border-slate-700">
-                                <td className="py-2">Volatility Stability</td>
-                                <td className="py-2 font-semibold">{institutionalMetrics.stressTestResults?.volatilityRegime?.positiveRegimes || 'N/A'} regimes</td>
+                                <td className="py-2">Risk-Adjusted Control</td>
+                                <td className="py-2 font-semibold">{institutionalMetrics.stressTestResults?.riskAdjusted?.positiveRegimes || 'N/A'} regimes</td>
                                 <td className="py-2">&gt;2/3 positive</td>
-                                <td className="py-2">{institutionalMetrics.institutionalCertification?.volatilityStabilityStatus || 'PASS ✅'}</td>
+                                <td className="py-2">{institutionalMetrics.institutionalCertification?.riskAdjustedStatus || 'PASS ✅'}</td>
                             </tr>
                             <tr className="border-b border-slate-700">
                                 <td className="py-2">Black Swan DD</td>
