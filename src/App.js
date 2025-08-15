@@ -318,6 +318,43 @@ const IndividualTradesTab = ({ trades }) => {
 
     return (
         <div className="space-y-4">
+            {/* Trade Summary Statistics - ADD THIS SECTION FIRST */}
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Total Trades</div>
+                    <div className="text-blue-400 text-2xl font-bold">{totalTrades}</div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Winning Trades</div>
+                    <div className="text-green-400 text-2xl font-bold">{winningTrades}</div>
+                    <div className="text-green-400 text-xs">({winRate}%)</div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Losing Trades</div>
+                    <div className="text-red-400 text-2xl font-bold">{losingTrades}</div>
+                    <div className="text-red-400 text-xs">({lossRate}%)</div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Avg Trades/Day</div>
+                    <div className="text-yellow-400 text-2xl font-bold">{avgTradesPerDay}</div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Avg Trades/Week</div>
+                    <div className="text-yellow-400 text-2xl font-bold">{avgTradesPerWeek}</div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Net P&L/Trade</div>
+                    <div className={`text-2xl font-bold ${parseFloat(netPnLPerTrade) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${netPnLPerTrade}
+                    </div>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600 text-center">
+                    <div className="text-slate-400 text-sm">Total P&L</div>
+                    <div className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        ${totalPnL.toFixed(2)}
+                    </div>
+                </div>
+            </div>
             {/* Filter Controls */}
             <div className="flex flex-wrap gap-4 mb-4">
                 <div className="flex items-center gap-2">
