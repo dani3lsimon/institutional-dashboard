@@ -206,6 +206,29 @@ const IndividualTradesTab = ({ trades }) => {
         );
     }
 
+    // 🚀 ADD ALL THESE CALCULATIONS RIGHT HERE:
+
+    // Calculate summary statistics
+    const totalTrades = trades.length;
+    const winningTrades = trades.filter(trade => trade.result === 'WIN').length;
+    const losingTrades = trades.filter(trade => trade.result === 'LOSS').length;
+    const winRate = totalTrades > 0 ? ((winningTrades / totalTrades) * 100).toFixed(1) : '0.0';
+    const lossRate = totalTrades > 0 ? ((losingTrades / totalTrades) * 100).toFixed(1) : '0.0';
+
+    // Calculate time-based statistics
+    const firstTradeDate = trades.length > 0 ? new Date(trades[0].entry_time) : new Date();
+    const lastTradeDate = trades.length > 0 ? new Date(trades[trades.length - 1].entry_time) : new Date();
+    const daysDifference = Math.max(1, (lastTradeDate - firstTradeDate) / (1000 * 60 * 60 * 24));
+    const weeksDifference = daysDifference / 7;
+    const avgTradesPerDay = (totalTrades / daysDifference).toFixed(1);
+    const avgTradesPerWeek = (totalTrades / weeksDifference).toFixed(1);
+
+    // Calculate net P&L per trade
+    const totalPnL = trades.reduce((sum, trade) => sum + parseFloat(trade.pnl || 0), 0);
+    const netPnLPerTrade = totalTrades > 0 ? (totalPnL / totalTrades).toFixed(2) : '0.00';
+
+
+
     // Function to convert pattern names to initials for privacy
     const getPatternInitials = (pattern) => {
         if (!pattern || pattern === 'Unknown' || pattern === 'N/A') return 'UNK';
@@ -355,6 +378,7 @@ const IndividualTradesTab = ({ trades }) => {
                     </div>
                 </div>
             </div>
+
             {/* Filter Controls */}
             <div className="flex flex-wrap gap-4 mb-4">
                 <div className="flex items-center gap-2">
