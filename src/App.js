@@ -266,8 +266,9 @@ const IndividualTradesTab = ({ trades }) => {
 
     return (
         <div className="space-y-6">
-            {/* Trade Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            {/* Trade Statistics Cards - EXPANDED */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
                     <h3 className="text-sm font-medium text-slate-400">Total Trades</h3>
                     <p className="text-2xl font-bold text-blue-400">{trades.length}</p>
@@ -291,9 +292,33 @@ const IndividualTradesTab = ({ trades }) => {
                     </p>
                 </div>
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                    <h3 className="text-sm font-medium text-slate-400">Net P&L</h3>
+                    <h3 className="text-sm font-medium text-slate-400">Avg Trades/Day</h3>
+                    <p className="text-2xl font-bold text-purple-400">
+                        {(() => {
+                            if (trades.length === 0) return '0';
+                            const firstDate = new Date(trades[0].entry_time);
+                            const lastDate = new Date(trades[trades.length - 1].entry_time);
+                            const daysDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24) + 1;
+                            return (trades.length / daysDiff).toFixed(1);
+                        })()}
+                    </p>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Avg Trades/Week</h3>
+                    <p className="text-2xl font-bold text-cyan-400">
+                        {(() => {
+                            if (trades.length === 0) return '0';
+                            const firstDate = new Date(trades[0].entry_time);
+                            const lastDate = new Date(trades[trades.length - 1].entry_time);
+                            const weeksDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24 * 7) + 1;
+                            return (trades.length / weeksDiff).toFixed(1);
+                        })()}
+                    </p>
+                </div>
+                <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400">Net P&L/Trade</h3>
                     <p className={`text-2xl font-bold ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        ${totalPnL.toFixed(2)}
+                        ${(totalPnL / trades.length).toFixed(2)}
                     </p>
                 </div>
             </div>
