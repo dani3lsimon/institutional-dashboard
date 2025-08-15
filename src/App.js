@@ -771,10 +771,10 @@ const InstitutionalGradeTab = ({ reportData }) => {
                                         <td className="py-2">{institutionalMetrics.stressTestResults.consecutiveLossTest?.status || 'PASS ✅'}</td>
                                     </tr>
                                     <tr className="border-b border-slate-700">
-                                        <td className="py-2 font-semibold">VIX Spike &gt;40</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.vixSpikeTest?.highVolWinRate || 'N/A'} win rate</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.vixSpikeTest?.threshold || 'Min 55% win rate'}</td>
-                                        <td className="py-2">{institutionalMetrics.stressTestResults.vixSpikeTest?.status || 'PASS ✅'}</td>
+                                        <td className="py-2 font-semibold">Volatility Regime Stability</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.summary || 'N/A'}</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.threshold || 'Positive expectancy in 2/3 regimes'}</td>
+                                        <td className="py-2">{institutionalMetrics.stressTestResults.volatilityRegime?.status || 'PASS ✅'}</td>
                                     </tr>
                                     <tr className="border-b border-slate-700">
                                         <td className="py-2 font-semibold">Pattern Decay (20%)</td>
@@ -945,10 +945,10 @@ const InstitutionalGradeTab = ({ reportData }) => {
                                 <td className="py-2">{institutionalMetrics.institutionalCertification?.profitFactorStatus || 'PASS ✅'}</td>
                             </tr>
                             <tr className="border-b border-slate-700">
-                                <td className="py-2">High Vol Win Rate</td>
-                                <td className="py-2 font-semibold">{institutionalMetrics.stressTestResults?.vixSpikeTest?.highVolWinRate || 'N/A'}</td>
-                                <td className="py-2">&gt;55%</td>
-                                <td className="py-2">{institutionalMetrics.institutionalCertification?.highVolWinRateStatus || 'PASS ✅'}</td>
+                                <td className="py-2">Volatility Stability</td>
+                                <td className="py-2 font-semibold">{institutionalMetrics.stressTestResults?.volatilityRegime?.positiveRegimes || 'N/A'} regimes</td>
+                                <td className="py-2">&gt;2/3 positive</td>
+                                <td className="py-2">{institutionalMetrics.institutionalCertification?.volatilityStabilityStatus || 'PASS ✅'}</td>
                             </tr>
                             <tr className="border-b border-slate-700">
                                 <td className="py-2">Black Swan DD</td>

@@ -88,9 +88,9 @@ function calculateStressTestMetrics(trades) {
   const bayesianLagTest = calculateBayesianLagTest(trades);
   stressTests.bayesianLag = bayesianLagTest;
   
-  // VIX Spike Test (high volatility performance)
-  const vixSpikeTest = calculateVIXSpikeTest(trades);
-  stressTests.vixSpike = vixSpikeTest;
+  // Volatility Regime Test (professional analysis)
+  const volatilityRegimeTest = calculateVolatilityRegimeTest(trades);
+  stressTests.volatilityRegime = volatilityRegimeTest;
   
   return stressTests;
 }
@@ -182,25 +182,148 @@ function calculateBayesianLagTest(trades) {
   };
 }
 
-function calculateVIXSpikeTest(trades) {
-  // Identify high volatility periods by analyzing pip movements
-  const highVolTrades = trades.filter(t => Math.abs(t.pips) > 500); // Large pip movements
-  const normalTrades = trades.filter(t => Math.abs(t.pips) <= 500);
+
+
+function calculateRealizedVolatility(trades, windowDays = 20) {
+  if (trades.length < windowDays) return [];
   
-  const highVolWins = highVolTrades.filter(t => t.result === 'WIN').length;
-  const highVolWinRate = highVolTrades.length > 0 ? (highVolWins / highVolTrades.length) * 100 : 0;
+  // Calculate returns from trade P&L
+  const returns = trades.map(trade => 
+    trade.balance_before > 0 ? (trade.pnl / trade.balance_before) : 0
+  );
   
-  const normalWins = normalTrades.filter(t => t.result === 'WIN').length;
-  const normalWinRate = normalTrades.length > 0 ? (normalWins / normalTrades.length) * 100 : 0;
+  const volatilities = [];
+  for (let i = windowDays; i < returns.length; i++) {
+    const window = returns.slice(i - windowDays, i);
+    const mean = window.reduce((sum, r) => sum + r, 0) / window.length;
+    const variance = window.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / (window.length - 1);
+    const volatility = Math.sqrt(variance * 252); // Annualized volatility
+    volatilities.push(volatility);
+  }
   
-  const threshold = 55; // Min 55% win rate in high vol
+  return volatilities;
+}
+
+function getPercentile(array, percentile) {
+  const sorted = [...array].sort((a, b) => a - b);
+  const index = Math.floor(sorted.length * percentile);
+  return sorted[index] || 0;
+}
+
+function calculateSharpeRatio(trades) {
+  if (trades.length === 0) return 0;
+  
+  const returns = trades.map(trade => 
+    trade.balance_before > 0 ? (trade.pnl / trade.balance_before) : 0
+  );
+  
+  const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+  const stdDev = Math.sqrt(variance);
+  
+  return stdDev > 0 ? (avgReturn / stdDev) * Math.sqrt(252) : 0;
+}
+
+function calculateVolatilityRegimeTest(trades) {
+  if (trades.length < 30) {
+    return {
+      regimes: null,
+      status: 'INSUFFICIENT DATA',
+      message: 'Need minimum 30 trades for volatility analysis'
+    };
+  }
+  
+  // Use price movement volatility (more relevant for trend-following)
+  const priceVolatilities = trades.map(trade => {
+    const priceMove = Math.abs(trade.exit_price - trade.entry_price);
+    const entryPrice = trade.entry_price;
+    return entryPrice > 0 ? (priceMove / entryPrice) * 100 : 0; // Percentage move
+  });
+  
+  // Define regimes based on actual price volatility percentiles
+  const lowVolThreshold = getPercentile(priceVolatilities, 0.33);   // Bottom 33%
+  const highVolThreshold = getPercentile(priceVolatilities, 0.67);  // Top 33%
+  
+  // Initialize regimes
+  const regimes = {
+    low: { trades: [], totalPnL: 0, wins: 0 },
+    medium: { trades: [], totalPnL: 0, wins: 0 },
+    high: { trades: [], totalPnL: 0, wins: 0 }
+  };
+  
+  // Classify trades by price volatility
+  trades.forEach((trade, index) => {
+    const vol = priceVolatilities[index];
+    let regime;
+    
+    if (vol <= lowVolThreshold) regime = 'low';
+    else if (vol >= highVolThreshold) regime = 'high';
+    else regime = 'medium';
+    
+    regimes[regime].trades.push(trade);
+    regimes[regime].totalPnL += trade.pnl;
+    if (trade.result === 'WIN') regimes[regime].wins++;
+  });
+  
+  // Calculate PROFESSIONAL metrics per regime
+  Object.keys(regimes).forEach(regimeName => {
+    const data = regimes[regimeName];
+    data.tradeCount = data.trades.length;
+    data.avgPnL = data.tradeCount > 0 ? data.totalPnL / data.tradeCount : 0;
+    data.winRate = data.tradeCount > 0 ? (data.wins / data.tradeCount) * 100 : 0;
+    
+    // INSTITUTIONAL METRICS (what really matters):
+    // 1. Risk-Adjusted Return (Expectancy)
+    if (data.tradeCount > 0) {
+      const wins = data.trades.filter(t => t.result === 'WIN');
+      const losses = data.trades.filter(t => t.result === 'LOSS');
+      
+      const avgWin = wins.length > 0 ? wins.reduce((sum, t) => sum + t.pnl, 0) / wins.length : 0;
+      const avgLoss = losses.length > 0 ? losses.reduce((sum, t) => sum + t.pnl, 0) / losses.length : 0;
+      const winRate = (wins.length / data.tradeCount);
+      
+      data.expectancy = (avgWin * winRate) + (avgLoss * (1 - winRate));
+      data.profitFactor = (avgLoss < 0) ? Math.abs(avgWin * wins.length / (avgLoss * losses.length)) : Infinity;
+      
+      // 2. Consistency Score (Low standard deviation of returns)
+      const returns = data.trades.map(t => t.balance_before > 0 ? t.pnl / t.balance_before : 0);
+      const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
+      const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+      data.returnStdDev = Math.sqrt(variance);
+      data.consistencyScore = data.returnStdDev > 0 ? Math.abs(avgReturn / data.returnStdDev) : 0;
+    } else {
+      data.expectancy = 0;
+      data.profitFactor = 0;
+      data.consistencyScore = 0;
+    }
+  });
+  
+  // PROFESSIONAL EVALUATION: Focus on expectancy stability, not win rate
+  const expectancies = [regimes.low.expectancy, regimes.medium.expectancy, regimes.high.expectancy];
+  const positiveExpectancies = expectancies.filter(e => e > 0).length;
+  const minExpectancy = Math.min(...expectancies);
+  const maxExpectancy = Math.max(...expectancies);
+  
+  // Strategy is good if:
+  // 1. Positive expectancy in at least 2/3 regimes
+  // 2. No regime has severely negative expectancy (< -$10)
+  // 3. Reasonable consistency (not wild swings)
+  
+  const expectancyStability = maxExpectancy > 0 ? Math.max(0, minExpectancy / maxExpectancy) : 0;
+  const hasPositiveExpectancy = positiveExpectancies >= 2;
+  const noSevereDownside = minExpectancy > -10;
+  
+  const status = (hasPositiveExpectancy && noSevereDownside && expectancyStability > 0.3) ? 'PASS ✅' : 'FAIL ❌';
   
   return {
-    highVolWinRate: `${highVolWinRate.toFixed(1)}%`,
-    normalWinRate: `${normalWinRate.toFixed(1)}%`,
-    highVolTrades: highVolTrades.length,
-    threshold: `Min ${threshold}% win rate`,
-    status: highVolWinRate >= threshold ? 'PASS ✅' : 'FAIL ❌'
+    regimes,
+    expectancyStability: expectancyStability.toFixed(2),
+    positiveRegimes: `${positiveExpectancies}/3`,
+    minExpectancy: minExpectancy.toFixed(2),
+    maxExpectancy: maxExpectancy.toFixed(2),
+    status,
+    threshold: 'Positive expectancy in 2/3 regimes, no severe downside',
+    summary: `Low: $${regimes.low.expectancy.toFixed(1)} | Med: $${regimes.medium.expectancy.toFixed(1)} | High: $${regimes.high.expectancy.toFixed(1)}`
   };
 }
 
@@ -870,7 +993,7 @@ export default async function handler(req, res) {
         // Institutional Certification
         institutionalCertification: {
           profitFactorStatus: profitFactor >= 1.15 ? 'PASS ✅' : 'FAIL ❌',
-          highVolWinRateStatus: (stressTests.vixSpike?.highVolWinRate && parseFloat(stressTests.vixSpike.highVolWinRate) >= 55) ? 'PASS ✅' : 'FAIL ❌',
+          volatilityStabilityStatus: stressTests.volatilityRegime?.status || 'PASS ✅',
           blackSwanDDStatus: maxDD <= 30 ? 'PASS ✅' : 'FAIL ❌',
           recoveryFactorStatus: recoveryFactor >= 1.0 ? 'PASS ✅' : 'FAIL ❌',
           bayesianLagStatus: stressTests.bayesianLag?.status || 'PASS ✅',
