@@ -862,12 +862,33 @@ export default async function handler(req, res) {
     
     const lines = csvContent.trim().split('\n');
     if (lines.length < 2) throw new Error("CSV file is empty or invalid.");
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+
+    // Proper CSV parser that respects quoted fields containing commas
+    function parseCSVLine(line) {
+      const values = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      values.push(current.trim());
+      return values;
+    }
+
+    const headers = parseCSVLine(lines[0]).map(h => h.replace(/"/g, ''));
     const trades = lines.slice(1).map((line) => {
-      const values = line.split(',');
+      const values = parseCSVLine(line);
       const trade = {};
       headers.forEach((header, index) => {
-        let value = values[index] ? values[index].trim().replace(/"/g, '') : '';
+        let value = values[index] ? values[index].replace(/"/g, '') : '';
         if (['entry_price', 'exit_price', 'pnl', 'pips', 'confidence', 'position_size', 'balance_before', 'balance_after', 'risk_percentage', 'bayesian_confidence', 'combined_bayesian_adjustment'].includes(header)) {
           value = parseFloat(value) || 0;
         }
