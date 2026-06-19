@@ -50,13 +50,26 @@ const CustomTooltip = ({ active, payload, label, chartType }) => {
 };
 
 // --- Page Components ---
+const ADMIN_EMAIL = 'dani3lsimon@gmail.com';
+
 function ResultsPage() {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [reportData, setReportData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('Overview');
-    const [individualTrades, setIndividualTrades] = useState([]); //
+    const [individualTrades, setIndividualTrades] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+
+    useEffect(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setCurrentUser(session?.user ?? null);
+      });
+    }, []);
+
+    const isAdmin = currentUser?.email === ADMIN_EMAIL;
+
     useEffect(() => {
         const fetchReport = async () => {
             if (!id) return;
@@ -100,6 +113,24 @@ function ResultsPage() {
 
     return (
         <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 md:p-6 font-sans">
+             {isAdmin && (
+               <div className="flex items-center gap-3 mb-4">
+                 <button
+                   onClick={() => navigate(-1)}
+                   className="px-3 py-1.5 bg-slate-700/50 border border-slate-600 hover:border-slate-500
+                              text-slate-400 hover:text-slate-200 text-xs rounded-lg transition-all tracking-wider"
+                 >
+                   ← Back
+                 </button>
+                 <button
+                   onClick={() => navigate('/library')}
+                   className="px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 hover:border-blue-500/60
+                              text-blue-400 text-xs font-bold rounded-lg transition-all tracking-wider uppercase"
+                 >
+                   Library
+                 </button>
+               </div>
+             )}
              <div className="text-center mb-8">
                 <h1 className="text-3xl md:text-4xl font-bold text-blue-400 mb-2">AI Trading Model: Institutional Performance Review</h1>
                 <p className="text-slate-300 text-lg">Comprehensive Backtest Analysis & Risk Assessment</p>
