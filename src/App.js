@@ -50,62 +50,6 @@ const CustomTooltip = ({ active, payload, label, chartType }) => {
 };
 
 // --- Page Components ---
-function UploadPage() {
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const navigate = useNavigate();
-
-    const goToLibrary = () => navigate('/library');
-
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        setLoading(true);
-        setError(null);
-        const reader = new FileReader();
-        reader.readAsText(file);
-
-        reader.onload = async () => {
-            try {
-                const response = await fetch('/api/generate-report', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ csv: reader.result, fileName: file.name })
-                });
-                const data = await response.json();
-                if (!response.ok) { throw new Error(data.error || 'Failed to generate report.'); }
-                navigate(`/results/${data.id}`);
-            } catch (err) {
-                setError(err.message);
-                setLoading(false);
-            }
-        };
-        reader.onerror = () => {
-             setError("Failed to read file.");
-             setLoading(false);
-        };
-    };
-
-    return (
-        <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-            <div className="text-center p-8 bg-slate-800/50 rounded-lg border border-slate-700 max-w-md mx-auto">
-                <h2 className="text-2xl font-bold text-blue-400 mb-4">Generate Sharable Report</h2>
-                <p className="text-slate-400 mb-6">Select your `...trades.csv` file to process it and generate a secure, shareable link to the results.</p>
-                <input type="file" id="file-upload" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Select CSV File</label>
-                <div className="mt-4">
-                    <button onClick={goToLibrary} className="text-slate-500 hover:text-blue-400 text-sm transition-colors underline">
-                        or open CSV Library →
-                    </button>
-                </div>
-                {loading && <div className="mt-4 text-blue-400 animate-pulse">Processing Report...</div>}
-                {error && <div className="mt-4 text-red-400">{error}</div>}
-            </div>
-        </div>
-    );
-}
-
 function ResultsPage() {
     const { id } = useParams();
     const [reportData, setReportData] = useState(null);
@@ -226,7 +170,7 @@ export default function App() {
         !user
           ? <LoginPage onLogin={setUser} />
           : <Routes>
-              <Route path="/" element={<UploadPage />} />
+              <Route path="/" element={<CsvLibrary user={user} onLogout={handleLogout} />} />
               <Route path="/library" element={<CsvLibrary user={user} onLogout={handleLogout} />} />
             </Routes>
       } />

@@ -105,7 +105,6 @@ export default function CsvLibrary({ user, onLogout }) {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
   const [dragOver, setDragOver]   = useState(false);
-  const [fetchingAurum, setFetchingAurum] = useState(false);
   // Per-strategy sort: { chartvision: 'wr', smc: 'dd', dual_ai: 'rr' }
   const [sortBy, setSortBy] = useState({});
   const fileInputRef = useRef(null);
@@ -211,35 +210,6 @@ export default function CsvLibrary({ user, onLogout }) {
     e.target.value = '';
   };
 
-  const handleFetchAurum = async () => {
-    setFetchingAurum(true);
-    setUploadMsg('Fetching latest from AURUM-X...');
-    try {
-      const csvRes = await fetch('https://aurum-x-backend-production.up.railway.app/forecast/signal-history/export.csv');
-      if (!csvRes.ok) throw new Error('AURUM-X backend unreachable');
-      const csvText = await csvRes.text();
-
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          csv: csvText,
-          fileName: `aurum_x_${new Date().toISOString().slice(0, 10)}.csv`,
-          strategy: 'dual_ai',
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed');
-      setUploadMsg('AURUM-X data imported!');
-      setTimeout(() => setUploadMsg(null), 3000);
-      fetchReports();
-    } catch (e) {
-      setUploadMsg(`Error: ${e.message}`);
-      setTimeout(() => setUploadMsg(null), 5000);
-    }
-    setFetchingAurum(false);
-  };
-
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this report?')) return;
     try {
@@ -270,22 +240,6 @@ export default function CsvLibrary({ user, onLogout }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={handleFetchAurum}
-            disabled={fetchingAurum}
-            className="px-4 py-2 bg-orange-600/20 border border-orange-500/30 hover:border-orange-500/60
-                       text-orange-400 text-xs font-bold rounded-lg transition-all tracking-wider uppercase
-                       disabled:opacity-40"
-          >
-            {fetchingAurum ? 'Fetching...' : '◆ Fetch AURUM-X'}
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="px-4 py-2 bg-slate-700/50 border border-slate-600 hover:border-slate-500
-                       text-slate-400 text-xs rounded-lg transition-all tracking-wider"
-          >
-            ← Upload Single
-          </button>
           <div className="text-xs text-slate-600">{user?.email}</div>
           <button
             onClick={onLogout}
