@@ -138,7 +138,7 @@ function getSignalSourceAnalysis(trades) {
 // 🔥 ADD THIS FUNCTION HERE (after getSignalSourceAnalysis)
 function detectStrategy(trades) {
   const signalSources = [...new Set(trades.map(trade => trade.signal_source))];
-  
+
   if (signalSources.length === 1) {
     const source = signalSources[0].toUpperCase();
     return `Single AI (${source})`;
@@ -149,6 +149,45 @@ function detectStrategy(trades) {
   } else {
     return 'Unknown Strategy';
   }
+}
+
+// Auto-classify CSV into ChartVision / SMC / DUAL AI bucket
+function classifyStrategy(trades) {
+  const sources = new Set();
+  const patterns = [];
+  for (const t of trades) {
+    const src = (t.signal_source || '').toLowerCase().trim();
+    if (src && src !== 'unknown') sources.add(src);
+    const pat = (t.pattern || t.ai_pattern || '').toLowerCase();
+    if (pat) patterns.push(pat);
+  }
+
+  // If signal_source column distinguishes them
+  const hasCv  = sources.has('chartvision');
+  const hasSmc = sources.has('smc');
+  const hasBoth = sources.has('both');
+
+  if (hasBoth || (hasCv && hasSmc)) return 'dual_ai';
+  if (hasCv && !hasSmc) return 'chartvision';
+  if (hasSmc && !hasCv) return 'smc';
+
+  // Fallback: check patterns when signal_source is absent
+  const cvPatterns  = patterns.filter(p => p.includes('chartvision'));
+  const smcPatterns = patterns.filter(p =>
+    p.includes('reversal') || p.includes('breakout') ||
+    p.includes('accumulation') || p.includes('pullback') ||
+    p.includes('structure')
+  );
+
+  if (cvPatterns.length > 0 && smcPatterns.length > 0) return 'dual_ai';
+  if (cvPatterns.length > 0) return 'chartvision';
+  if (smcPatterns.length > 0) return 'smc';
+
+  // AURUM-X exports
+  const aurumSources = trades.filter(t => (t.signal_source || '').toLowerCase() === 'aurum-x');
+  if (aurumSources.length > 0) return 'dual_ai';
+
+  return 'unknown';
 }
 
 // === NEW ENHANCED INSTITUTIONAL METRICS FUNCTIONS ===
@@ -1116,7 +1155,10 @@ export default async function handler(req, res) {
           slippageControlStatus: avgEffectiveLeverage <= 5.0 ? 'PASS ✅' : 'FAIL ❌' // Leverage control
         }
       },
-      fileName: req.body.fileName || 'uploaded_data.csv'
+      fileName: req.body.fileName || 'uploaded_data.csv',
+      strategy: req.body.strategy || classifyStrategy(trades),
+      tradeCount: trades.length,
+      uploadedAt: new Date().toISOString(),
     };
 
     const { data, error } = await supabase
@@ -1127,7 +1169,11 @@ export default async function handler(req, res) {
 
     if (error) { throw error; }
 
-    return res.status(200).json({ id: data.id });
+    return res.status(200).json({
+      id: data.id,
+      strategy: resultsJson.strategy,
+      tradeCount: resultsJson.tradeCount,
+    });
 
   } catch (error) {
     console.error('API Error:', error);

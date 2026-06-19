@@ -1,4 +1,6 @@
 import AIModelPerformanceChart from './components/AIModelPerformanceChart';
+import LoginPage from './components/LoginPage';
+import CsvLibrary from './components/CsvLibrary';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Routes, Route, useParams, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient'; // Make sure you have this file
@@ -15,7 +17,8 @@ const MetricCard = ({ title, value, subtitle, color = 'blue', size = 'normal' })
 
 const CustomTooltip = ({ active, payload, label, chartType }) => {
     if (active && payload && payload.length) {
-        const data = payload[0].payload;
+        const data = payload[0]?.payload;
+        if (!data) return null;
         return (
             <div className="bg-slate-800/90 backdrop-blur-sm border border-blue-400 rounded-lg p-3 shadow-lg text-sm max-w-xs">
                 {chartType === 'equity' && <>
@@ -29,7 +32,7 @@ const CustomTooltip = ({ active, payload, label, chartType }) => {
                 {chartType === 'risk' && <>
                     <p className="text-blue-300 font-semibold">Trade #{data.trade}</p>
                     <p className="text-green-400">Risk: {data.risk_percentage?.toFixed(2)}%</p>
-                    <p className="text-slate-400">Date: {new Date(data.entry_time).toLocaleDateString()}</p>
+                    <p className="text-slate-400">Date: {data.entry_time ? new Date(data.entry_time).toLocaleDateString() : 'N/A'}</p>
                 </>}
                  {chartType === 'sizing' && <>
                     <p className="text-blue-300 font-semibold">Trade #{data.trade}</p>
@@ -51,6 +54,8 @@ function UploadPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
+
+    const goToLibrary = () => navigate('/library');
 
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
@@ -89,6 +94,11 @@ function UploadPage() {
                 <p className="text-slate-400 mb-6">Select your `...trades.csv` file to process it and generate a secure, shareable link to the results.</p>
                 <input type="file" id="file-upload" accept=".csv" onChange={handleFileUpload} className="hidden" />
                 <label htmlFor="file-upload" className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Select CSV File</label>
+                <div className="mt-4">
+                    <button onClick={goToLibrary} className="text-slate-500 hover:text-blue-400 text-sm transition-colors underline">
+                        or open CSV Library →
+                    </button>
+                </div>
                 {loading && <div className="mt-4 text-blue-400 animate-pulse">Processing Report...</div>}
                 {error && <div className="mt-4 text-red-400">{error}</div>}
             </div>
@@ -181,10 +191,45 @@ function ResultsPage() {
 
 // --- Main App Router ---
 export default function App() {
+  const [user, setUser]       = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  if (!authReady) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+        <div className="text-blue-400 animate-pulse tracking-widest text-sm">LOADING...</div>
+      </div>
+    );
+  }
+
+  // Results pages are public (shareable links) — everything else requires auth
   return (
     <Routes>
-      <Route path="/" element={<UploadPage />} />
       <Route path="/results/:id" element={<ResultsPage />} />
+      <Route path="*" element={
+        !user
+          ? <LoginPage onLogin={setUser} />
+          : <Routes>
+              <Route path="/" element={<UploadPage />} />
+              <Route path="/library" element={<CsvLibrary user={user} onLogout={handleLogout} />} />
+            </Routes>
+      } />
     </Routes>
   );
 }
