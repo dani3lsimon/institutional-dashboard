@@ -91,7 +91,14 @@ export default function CsvLibrary({ user, onLogout }) {
   useEffect(() => { fetchReports(); }, [fetchReports]);
 
   const getStrategy = (report) => {
-    return report.data?.strategy || 'unknown';
+    const d = report.data || {};
+    if (d.strategy) return d.strategy;
+    // Fallback: derive from headerData.strategy written by detectStrategy()
+    const hs = (d.headerData?.strategy || '').toUpperCase();
+    if (hs.includes('CHARTVISION')) return 'chartvision';
+    if (hs.includes('SMC')) return 'smc';
+    if (hs.includes('DUAL') || hs.includes('MULTI')) return 'dual_ai';
+    return 'unknown';
   };
 
   const processFile = async (file) => {
