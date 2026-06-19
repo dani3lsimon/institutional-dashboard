@@ -54,17 +54,9 @@ function ReportCard({ report, colors, onDelete, isLatest }) {
   return (
     <div
       className={`${colors.bg} ${colors.border} ${colors.hover} border rounded-lg p-3 cursor-pointer
-                  transition-all hover:shadow-lg hover:shadow-blue-500/5 group relative
-                  ${isLatest ? 'ring-1 ring-green-500/40' : ''}`}
+                  transition-all hover:shadow-lg hover:shadow-blue-500/5 group relative`}
       onClick={() => navigate(`/results/${report.id}`)}
     >
-      {isLatest && (
-        <span className="absolute -top-2 left-3 px-2 py-0.5 bg-green-500/20 border border-green-500/40
-                         text-green-400 text-[9px] font-bold tracking-widest uppercase rounded-full">
-          LATEST
-        </span>
-      )}
-
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(report.id); }}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400
@@ -74,12 +66,7 @@ function ReportCard({ report, colors, onDelete, isLatest }) {
         ✕
       </button>
 
-      <div className="flex items-center justify-between mb-1.5 mt-1">
-        <div className="text-[11px] text-slate-500 truncate pr-5 flex-1" title={m.fileName}>{m.fileName}</div>
-        <span className="text-[11px] font-semibold text-slate-300 bg-slate-700/60 px-2 py-0.5 rounded ml-2 whitespace-nowrap">
-          {m.date}
-        </span>
-      </div>
+      <div className="text-[11px] text-slate-500 mb-2 truncate pr-5" title={m.fileName}>{m.fileName}</div>
 
       <div className="grid grid-cols-5 gap-1">
         <div>
@@ -104,11 +91,17 @@ function ReportCard({ report, colors, onDelete, isLatest }) {
         </div>
       </div>
 
-      {m.pf > 0 && (
-        <div className="mt-1.5 text-right">
-          <span className="text-[9px] text-slate-600">PF {m.pf.toFixed(2)}</span>
+      <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center gap-2">
+          {isLatest && (
+            <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-[9px] font-bold tracking-wider uppercase rounded">
+              LATEST
+            </span>
+          )}
+          {m.pf > 0 && <span className="text-[9px] text-slate-600">PF {m.pf.toFixed(2)}</span>}
         </div>
-      )}
+        <span className="text-[11px] font-semibold text-slate-300">{m.date}</span>
+      </div>
     </div>
   );
 }
@@ -348,7 +341,7 @@ export default function CsvLibrary({ user, onLogout }) {
               )}
 
               {/* Report cards */}
-              <div className="space-y-4 max-h-[calc(100vh-360px)] overflow-y-auto pr-1 pt-2">
+              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-1">
                 {sortedItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-700 text-xs tracking-wider uppercase">
                     No reports yet
