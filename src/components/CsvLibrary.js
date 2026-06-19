@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import LiveTrading from './LiveTrading';
 
 const STRATEGIES = [
   { key: 'chartvision', label: 'ChartVision', color: 'purple', icon: '📊' },
@@ -107,12 +108,12 @@ function ReportCard({ report, colors, onDelete, isLatest }) {
 }
 
 export default function CsvLibrary({ user, onLogout }) {
+  const [activeTab, setActiveTab] = useState('backtests');
   const [reports, setReports]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
   const [dragOver, setDragOver]   = useState(false);
-  // Per-strategy sort: { chartvision: 'wr', smc: 'dd', dual_ai: 'rr' }
   const [sortBy, setSortBy] = useState({});
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
@@ -248,11 +249,28 @@ export default function CsvLibrary({ user, onLogout }) {
       `}</style>
       {/* Header */}
       <header className="border-b border-slate-700/50 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-blue-400 tracking-wider">CSV LIBRARY</h1>
-          <p className="text-xs text-slate-500 tracking-wider mt-0.5">
-            {reports.length} report{reports.length !== 1 ? 's' : ''} stored
-          </p>
+        <div className="flex items-center gap-6">
+          <div>
+            <h1 className="text-xl font-bold text-blue-400 tracking-wider">DASHBOARD</h1>
+          </div>
+          <div className="flex gap-1">
+            {[
+              { key: 'backtests', label: 'Backtests', count: reports.length },
+              { key: 'live', label: 'Live Trading' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-1.5 text-xs font-bold tracking-wider uppercase rounded-lg transition-all
+                  ${activeTab === tab.key
+                    ? 'bg-blue-600/20 border border-blue-500/40 text-blue-400'
+                    : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                  }`}
+              >
+                {tab.label} {tab.count !== undefined ? `(${tab.count})` : ''}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="text-xs text-slate-600">{user?.email}</div>
@@ -265,6 +283,15 @@ export default function CsvLibrary({ user, onLogout }) {
         </div>
       </header>
 
+      {/* Live Trading Tab */}
+      {activeTab === 'live' && (
+        <div className="px-6 py-4">
+          <LiveTrading user={user} />
+        </div>
+      )}
+
+      {/* Backtests Tab */}
+      {activeTab !== 'live' && <>
       {/* Drop zone */}
       <div className="px-6 pt-4">
         <div
@@ -378,6 +405,7 @@ export default function CsvLibrary({ user, onLogout }) {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 }
