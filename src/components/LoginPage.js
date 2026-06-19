@@ -17,7 +17,13 @@ export default function LoginPage({ onLogin }) {
 
     try {
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: 'https://institutional-dashboard.vercel.app/',
+          },
+        });
         if (error) throw error;
         setMessage('Check your email for confirmation link.');
       } else {
