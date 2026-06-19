@@ -193,18 +193,13 @@ export default function App() {
     );
   }
 
-  // Results pages are public (shareable links) — everything else requires auth
+  const authGuard = (component) => !user ? <LoginPage onLogin={setUser} /> : component;
+
   return (
     <Routes>
       <Route path="/results/:id" element={<ResultsPage />} />
-      <Route path="*" element={
-        !user
-          ? <LoginPage onLogin={setUser} />
-          : <Routes>
-              <Route path="/" element={<CsvLibrary user={user} onLogout={handleLogout} />} />
-              <Route path="/library" element={<CsvLibrary user={user} onLogout={handleLogout} />} />
-            </Routes>
-      } />
+      <Route path="/library" element={authGuard(<CsvLibrary user={user} onLogout={handleLogout} />)} />
+      <Route path="*" element={authGuard(<CsvLibrary user={user} onLogout={handleLogout} />)} />
     </Routes>
   );
 }
