@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, ReferenceLine } from 'recharts';
 import * as XLSX from 'xlsx';
 
 const ACCOUNT_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ef4444', '#06b6d4'];
@@ -14,6 +14,19 @@ function StatCard({ label, value, color }) {
   );
 }
 
+function parseCTraderDate(str) {
+  if (!str) return null;
+  const [datePart, timePart] = str.split(' ');
+  const [d, m, y] = datePart.split('/');
+  return new Date(`${y}-${m}-${d}T${timePart || '00:00:00'}`);
+}
+
+const fmtLegend = (statements) => (value) => {
+  const acctId = value.replace('acct_', '');
+  const st = statements.find(s => s.account_id === acctId);
+  return st?.account_label || `Account ${acctId}`;
+};
+
 export default function LiveTrading({ user }) {
   const [statements, setStatements] = useState([]);
   const [backtestCurves, setBacktestCurves] = useState([]);
@@ -23,6 +36,8 @@ export default function LiveTrading({ user }) {
   const [dragOver, setDragOver] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [selectedBacktests, setSelectedBacktests] = useState([]);
+  const [visibleAccounts, setVisibleAccounts] = useState({});
+  const [chartView, setChartView] = useState('equity'); // equity | pnl | daily | monthly
   const fileInputRef = useRef(null);
 
   const fetchStatements = useCallback(async () => {
@@ -50,6 +65,36 @@ export default function LiveTrading({ user }) {
   }, []);
 
   useEffect(() => { fetchStatements(); fetchBacktestCurves(); }, [fetchStatements, fetchBacktestCurves]);
+
+  // Initialize visibility when statements load
+  useEffect(() => {
+    if (statements.length > 0) {
+      setVisibleAccounts(prev => {
+        const next = { ...prev };
+        statements.forEach(st => {
+          if (next[st.account_id] === undefined) next[st.account_id] = true;
+        });
+        return next;
+      });
+    }
+  }, [statements]);
+
+  const visibleStatements = useMemo(
+    () => statements.filter(st => visibleAccounts[st.account_id] !== false),
+    [statements, visibleAccounts]
+  );
+
+  const toggleAccount = (accountId) => {
+    setVisibleAccounts(prev => ({ ...prev, [accountId]: !prev[accountId] }));
+  };
+
+  const toggleAll = () => {
+    const allVisible = statements.every(st => visibleAccounts[st.account_id] !== false);
+    const next = {};
+    statements.forEach(st => { next[st.account_id] = !allVisible; });
+    setVisibleAccounts(next);
+  };
+
 
   const processXlsx = async (file) => {
     return new Promise((resolve, reject) => {
@@ -116,66 +161,111 @@ export default function LiveTrading({ user }) {
     setStatements(prev => prev.filter(s => s.id !== id));
   };
 
-  // Build unified equity chart data
-  const buildEquityData = () => {
-    if (!statements.length) return [];
-
-    // For each statement, build a normalized equity series (% return)
-    const series = statements.map((st, idx) => {
+  // Equity curve (% return)
+  const equityData = useMemo(() => {
+    if (!visibleStatements.length) return [];
+    const series = visibleStatements.map(st => {
       const deals = st.deals || [];
       const startBal = deals.length > 0 ? deals[0].balance - deals[0].netPnl : 3000;
-      let bal = startBal;
-      return deals.map((d, i) => {
-        bal = d.balance;
-        return {
-          trade: i + 1,
-          [`acct_${st.account_id}`]: ((bal - startBal) / startBal * 100),
-          [`bal_${st.account_id}`]: bal,
-        };
-      });
+      return deals.map((d, i) => ({
+        trade: i + 1,
+        [`acct_${st.account_id}`]: parseFloat(((d.balance - startBal) / startBal * 100).toFixed(2)),
+      }));
     });
-
-    // Merge into unified array by trade index
     const maxLen = Math.max(...series.map(s => s.length));
     const merged = [];
     for (let i = 0; i < maxLen; i++) {
       const point = { trade: i + 1 };
-      series.forEach((s) => {
-        if (s[i]) Object.assign(point, s[i]);
-      });
+      series.forEach(s => { if (s[i]) Object.assign(point, s[i]); });
       merged.push(point);
     }
     return merged;
-  };
+  }, [visibleStatements]);
 
-  // Build comparison data: live vs backtest equity curves (normalized %)
-  const buildComparisonData = () => {
-    const data = [];
-
-    // Add live accounts
-    statements.forEach((st) => {
+  // Cumulative PnL ($)
+  const pnlData = useMemo(() => {
+    if (!visibleStatements.length) return [];
+    const series = visibleStatements.map(st => {
       const deals = st.deals || [];
-      const startBal = deals.length > 0 ? deals[0].balance - deals[0].netPnl : 3000;
-      let bal = startBal;
-      deals.forEach((d, i) => {
-        bal = d.balance;
-        if (!data[i]) data[i] = { trade: i + 1 };
-        data[i][`Live ${st.account_label || st.account_id}`] = ((bal - startBal) / startBal * 100);
+      let cumPnl = 0;
+      return deals.map((d, i) => {
+        cumPnl += d.netPnl;
+        return { trade: i + 1, [`acct_${st.account_id}`]: parseFloat(cumPnl.toFixed(2)) };
       });
     });
+    const maxLen = Math.max(...series.map(s => s.length));
+    const merged = [];
+    for (let i = 0; i < maxLen; i++) {
+      const point = { trade: i + 1 };
+      series.forEach(s => { if (s[i]) Object.assign(point, s[i]); });
+      merged.push(point);
+    }
+    return merged;
+  }, [visibleStatements]);
 
-    // Add selected backtest curves (we need full data for these)
-    // We'll fetch on demand when compare mode is activated
-    return data;
-  };
+  // Daily returns (% of starting balance)
+  const dailyReturns = useMemo(() => {
+    if (!visibleStatements.length) return [];
+    const allDays = new Set();
+    const acctDays = {};
+    visibleStatements.forEach(st => {
+      const deals = st.deals || [];
+      const startBal = deals.length > 0 ? deals[0].balance - deals[0].netPnl : 3000;
+      const dayMap = {};
+      deals.forEach(d => {
+        const dt = parseCTraderDate(d.closeTime);
+        if (!dt) return;
+        const key = dt.toISOString().slice(0, 10);
+        allDays.add(key);
+        dayMap[key] = (dayMap[key] || 0) + d.netPnl;
+      });
+      const pctMap = {};
+      Object.entries(dayMap).forEach(([k, v]) => { pctMap[k] = parseFloat(((v / startBal) * 100).toFixed(2)); });
+      acctDays[st.account_id] = pctMap;
+    });
+    return Array.from(allDays).sort().map(day => {
+      const point = { day: day.slice(5) };
+      visibleStatements.forEach(st => {
+        point[`acct_${st.account_id}`] = acctDays[st.account_id]?.[day] ?? 0;
+      });
+      return point;
+    });
+  }, [visibleStatements]);
+
+  // Monthly returns (% of starting balance)
+  const monthlyReturns = useMemo(() => {
+    if (!visibleStatements.length) return [];
+    const allMonths = new Set();
+    const acctMonths = {};
+    visibleStatements.forEach(st => {
+      const deals = st.deals || [];
+      const startBal = deals.length > 0 ? deals[0].balance - deals[0].netPnl : 3000;
+      const monthMap = {};
+      deals.forEach(d => {
+        const dt = parseCTraderDate(d.closeTime);
+        if (!dt) return;
+        const key = dt.toISOString().slice(0, 7);
+        allMonths.add(key);
+        monthMap[key] = (monthMap[key] || 0) + d.netPnl;
+      });
+      const pctMap = {};
+      Object.entries(monthMap).forEach(([k, v]) => { pctMap[k] = parseFloat(((v / startBal) * 100).toFixed(2)); });
+      acctMonths[st.account_id] = pctMap;
+    });
+    return Array.from(allMonths).sort().map(month => {
+      const point = { month };
+      visibleStatements.forEach(st => {
+        point[`acct_${st.account_id}`] = acctMonths[st.account_id]?.[month] ?? 0;
+      });
+      return point;
+    });
+  }, [visibleStatements]);
 
   const toggleBacktest = (id) => {
     setSelectedBacktests(prev =>
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
     );
   };
-
-  const equityData = buildEquityData();
 
   if (loading) {
     return <div className="text-center py-20 text-blue-400 animate-pulse tracking-widest text-sm">LOADING STATEMENTS...</div>;
@@ -212,13 +302,47 @@ export default function LiveTrading({ user }) {
         )}
       </div>
 
-      {/* Account cards */}
+      {/* Account filter checkboxes */}
       {statements.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="flex flex-wrap items-center gap-3 bg-slate-800/30 border border-slate-700/50 rounded-xl px-4 py-3">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mr-1">Show:</span>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={statements.every(st => visibleAccounts[st.account_id] !== false)}
+              onChange={toggleAll}
+              className="accent-blue-500 w-3.5 h-3.5"
+            />
+            <span className="text-xs text-slate-400 font-bold">ALL</span>
+          </label>
+          <div className="w-px h-4 bg-slate-700" />
           {statements.map((st, idx) => {
+            const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
+            return (
+              <label key={st.account_id} className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={visibleAccounts[st.account_id] !== false}
+                  onChange={() => toggleAccount(st.account_id)}
+                  className="w-3.5 h-3.5"
+                  style={{ accentColor: color }}
+                />
+                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-xs text-slate-400">{st.account_label || st.account_id}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Account cards */}
+      {visibleStatements.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {visibleStatements.map((st) => {
             const s = st.summary || {};
             const pnlNum = parseFloat(s.totalPnl || 0);
             const wrNum = parseFloat(s.winRate || 0);
+            const idx = statements.findIndex(x => x.account_id === st.account_id);
             const color = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
             return (
               <div key={st.id} className="bg-slate-800/40 border border-slate-700 rounded-xl p-4 relative group">
@@ -265,13 +389,30 @@ export default function LiveTrading({ user }) {
         </div>
       )}
 
-      {/* Equity curves */}
-      {equityData.length > 0 && (
+      {/* Chart view tabs + charts */}
+      {statements.length > 0 && (
         <div className="bg-slate-800/40 border border-slate-700 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-blue-400 tracking-wider uppercase">
-              Live Equity Curves (% Return)
-            </h3>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex gap-1">
+              {[
+                { key: 'equity', label: 'Equity Curve' },
+                { key: 'pnl', label: 'PnL Curve' },
+                { key: 'daily', label: 'Daily Returns' },
+                { key: 'monthly', label: 'Monthly Returns' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setChartView(tab.key)}
+                  className={`px-3 py-1.5 text-[10px] font-bold tracking-wider uppercase rounded-lg border transition-all
+                    ${chartView === tab.key
+                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-400'
+                      : 'bg-slate-700/30 border-slate-700 text-slate-500 hover:text-slate-300'
+                    }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setCompareMode(!compareMode)}
               className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-lg border transition-all
@@ -284,41 +425,125 @@ export default function LiveTrading({ user }) {
             </button>
           </div>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={equityData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="trade" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} label={{ value: 'Trade #', position: 'insideBottom', offset: -3, fill: '#64748b', fontSize: 11 }} />
-                <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
-                  formatter={(value, name) => {
-                    const acctId = name.replace('acct_', '');
-                    const st = statements.find(s => s.account_id === acctId);
-                    return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
-                  }}
-                />
-                <Legend
-                  formatter={(value) => {
-                    const acctId = value.replace('acct_', '');
-                    const st = statements.find(s => s.account_id === acctId);
-                    return st?.account_label || `Account ${acctId}`;
-                  }}
-                  wrapperStyle={{ fontSize: '11px' }}
-                />
-                {statements.map((st, idx) => (
-                  <Line
-                    key={st.account_id}
-                    type="monotone"
-                    dataKey={`acct_${st.account_id}`}
-                    stroke={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]}
-                    strokeWidth={2}
-                    dot={false}
+          {/* Equity Curve */}
+          {chartView === 'equity' && equityData.length > 0 && (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={equityData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="trade" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} label={{ value: 'Trade #', position: 'insideBottom', offset: -3, fill: '#64748b', fontSize: 11 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(value, name) => {
+                      const acctId = name.replace('acct_', '');
+                      const st = statements.find(s => s.account_id === acctId);
+                      return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
+                    }}
                   />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+                  <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
+                  <ReferenceLine y={0} stroke="#334155" />
+                  {visibleStatements.map(st => {
+                    const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    return (
+                      <Line key={st.account_id} type="monotone" dataKey={`acct_${st.account_id}`}
+                        stroke={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} strokeWidth={2} dot={false} />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* PnL Curve */}
+          {chartView === 'pnl' && pnlData.length > 0 && (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={pnlData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="trade" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} label={{ value: 'Trade #', position: 'insideBottom', offset: -3, fill: '#64748b', fontSize: 11 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(value, name) => {
+                      const acctId = name.replace('acct_', '');
+                      const st = statements.find(s => s.account_id === acctId);
+                      return [`$${value.toFixed(2)}`, st?.account_label || `Account ${acctId}`];
+                    }}
+                  />
+                  <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
+                  <ReferenceLine y={0} stroke="#334155" />
+                  {visibleStatements.map(st => {
+                    const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    return (
+                      <Line key={st.account_id} type="monotone" dataKey={`acct_${st.account_id}`}
+                        stroke={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} strokeWidth={2} dot={false} />
+                    );
+                  })}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Daily Returns */}
+          {chartView === 'daily' && dailyReturns.length > 0 && (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyReturns} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="day" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(value, name) => {
+                      const acctId = name.replace('acct_', '');
+                      const st = statements.find(s => s.account_id === acctId);
+                      return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
+                    }}
+                  />
+                  <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
+                  <ReferenceLine y={0} stroke="#475569" />
+                  {visibleStatements.map(st => {
+                    const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    return (
+                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`}
+                        fill={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} fillOpacity={0.8} radius={[2, 2, 0, 0]} />
+                    );
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Monthly Returns */}
+          {chartView === 'monthly' && monthlyReturns.length > 0 && (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyReturns} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="month" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
+                  <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    formatter={(value, name) => {
+                      const acctId = name.replace('acct_', '');
+                      const st = statements.find(s => s.account_id === acctId);
+                      return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
+                    }}
+                  />
+                  <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
+                  <ReferenceLine y={0} stroke="#475569" />
+                  {visibleStatements.map(st => {
+                    const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    return (
+                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`}
+                        fill={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} fillOpacity={0.8} radius={[2, 2, 0, 0]} />
+                    );
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       )}
 
