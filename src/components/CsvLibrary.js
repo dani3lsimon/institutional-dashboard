@@ -348,7 +348,7 @@ export default function CsvLibrary({ user, onLogout }) {
               )}
 
               {/* Report cards */}
-              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[calc(100vh-360px)] overflow-y-auto pr-1 pt-2">
                 {sortedItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-700 text-xs tracking-wider uppercase">
                     No reports yet
