@@ -494,7 +494,7 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="day" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
                   <Tooltip
-                    cursor={{ fill: 'rgba(30, 41, 59, 0.5)' }}
+                    cursor={false}
                     contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     labelStyle={{ color: '#94a3b8' }}
                     itemStyle={{ color: '#e2e8f0' }}
@@ -532,7 +532,7 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="month" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
                   <Tooltip
-                    cursor={{ fill: 'rgba(30, 41, 59, 0.5)' }}
+                    cursor={false}
                     contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     labelStyle={{ color: '#94a3b8' }}
                     itemStyle={{ color: '#e2e8f0' }}
