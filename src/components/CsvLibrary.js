@@ -123,11 +123,12 @@ export default function CsvLibrary({ user, onLogout }) {
       if (error) throw error;
       const all = (data || []).map(r => ({
         id: r.id,
+        createdAt: r.created_at,
         data: {
           strategy: r.strategy,
           fileName: r.file_name,
           tradeCount: r.trade_count,
-          uploadedAt: r.uploaded_at,
+          uploadedAt: r.uploaded_at || r.created_at,
           institutionalMetrics: {
             totalTrades: String(r.trade_count),
             winRate: String(r.win_rate),
