@@ -238,6 +238,13 @@ export default function CsvLibrary({ user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
+      <style>{`
+        .slim-scroll::-webkit-scrollbar { width: 4px; }
+        .slim-scroll::-webkit-scrollbar-track { background: transparent; }
+        .slim-scroll::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 4px; }
+        .slim-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
+        .slim-scroll { scrollbar-width: thin; scrollbar-color: rgba(100,116,139,0.3) transparent; }
+      `}</style>
       {/* Header */}
       <header className="border-b border-slate-700/50 px-6 py-4 flex items-center justify-between">
         <div>
@@ -341,7 +348,7 @@ export default function CsvLibrary({ user, onLogout }) {
               )}
 
               {/* Report cards */}
-              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto slim-scroll">
                 {sortedItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-700 text-xs tracking-wider uppercase">
                     No reports yet
