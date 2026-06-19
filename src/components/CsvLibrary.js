@@ -14,25 +14,49 @@ const colorMap = {
   blue:   { border: 'border-blue-500/30',   bg: 'bg-blue-500/5',    text: 'text-blue-400',   badge: 'bg-blue-500/20 text-blue-300',     hover: 'hover:border-blue-500/50' },
 };
 
+// Extract metrics from a report's data blob
+function getMetrics(report) {
+  const d = report.data || {};
+  const inst = d.institutionalMetrics || {};
+  const met  = d.metrics || {};
+  return {
+    winRate:    parseFloat(inst.winRate || 0),
+    maxDD:      parseFloat(met.maxDrawdown || 0),
+    rr:         parseFloat(inst.expectancy || 0),
+    pf:         parseFloat(inst.profitFactor || 0),
+    totalPnl:   parseFloat(met.totalPnL || d.totalReturn || 0),
+    tradeCount: parseInt(inst.totalTrades || d.tradeCount || (d.individualTrades?.length) || 0),
+    fileName:   d.fileName || 'unnamed.csv',
+    date:       d.uploadedAt
+      ? new Date(d.uploadedAt).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'2-digit' })
+      : d.fileName?.match(/(\d{8})/)
+        ? `${d.fileName.match(/(\d{8})/)[1].slice(0,4)}-${d.fileName.match(/(\d{8})/)[1].slice(4,6)}-${d.fileName.match(/(\d{8})/)[1].slice(6,8)}`
+        : '—',
+  };
+}
+
+const SORT_OPTIONS = [
+  { key: 'wr',   label: 'WR',  field: 'winRate',  desc: true },
+  { key: 'dd',   label: 'DD',  field: 'maxDD',    desc: false },
+  { key: 'rr',   label: 'R:R', field: 'rr',       desc: true },
+  { key: 'pnl',  label: 'PnL', field: 'totalPnl', desc: true },
+];
+
 function ReportCard({ report, colors, onDelete }) {
   const navigate = useNavigate();
-  const d = report.data || {};
-  const winRate    = d.winRate || d.metrics?.winRate || '—';
-  const totalPnl   = d.totalReturn || d.metrics?.totalPnL || '—';
-  const tradeCount = d.tradeCount || d.individualTrades?.length || '—';
-  const fileName   = d.fileName || 'unnamed.csv';
-  const date       = d.uploadedAt ? new Date(d.uploadedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+  const m = getMetrics(report);
 
-  const pnlNum   = parseFloat(totalPnl);
-  const pnlColor = isNaN(pnlNum) ? 'text-slate-400' : pnlNum >= 0 ? 'text-green-400' : 'text-red-400';
+  const pnlColor = m.totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
+  const wrColor  = m.winRate >= 50 ? 'text-green-400' : m.winRate >= 40 ? 'text-yellow-400' : 'text-red-400';
+  const ddColor  = m.maxDD <= 10 ? 'text-green-400' : m.maxDD <= 20 ? 'text-yellow-400' : 'text-red-400';
+  const rrColor  = m.rr > 0 ? 'text-green-400' : 'text-red-400';
 
   return (
     <div
-      className={`${colors.bg} ${colors.border} ${colors.hover} border rounded-lg p-4 cursor-pointer
+      className={`${colors.bg} ${colors.border} ${colors.hover} border rounded-lg p-3 cursor-pointer
                   transition-all hover:shadow-lg hover:shadow-blue-500/5 group relative`}
       onClick={() => navigate(`/results/${report.id}`)}
     >
-      {/* Delete button */}
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(report.id); }}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-600 hover:text-red-400
@@ -42,24 +66,35 @@ function ReportCard({ report, colors, onDelete }) {
         ✕
       </button>
 
-      <div className="text-xs text-slate-500 mb-1 truncate" title={fileName}>{fileName}</div>
-      <div className="grid grid-cols-3 gap-2 mt-2">
+      <div className="text-[11px] text-slate-500 mb-2 truncate pr-5" title={m.fileName}>{m.fileName}</div>
+
+      <div className="grid grid-cols-5 gap-1">
         <div>
-          <div className="text-[10px] text-slate-600 uppercase tracking-wider">Trades</div>
-          <div className="text-sm font-bold text-slate-300">{tradeCount}</div>
+          <div className="text-[9px] text-slate-600 uppercase tracking-wider">Trades</div>
+          <div className="text-xs font-bold text-slate-300">{m.tradeCount}</div>
         </div>
         <div>
-          <div className="text-[10px] text-slate-600 uppercase tracking-wider">Win%</div>
-          <div className="text-sm font-bold text-slate-300">{typeof winRate === 'number' ? winRate.toFixed(1) : winRate}%</div>
+          <div className="text-[9px] text-slate-600 uppercase tracking-wider">Win%</div>
+          <div className={`text-xs font-bold ${wrColor}`}>{m.winRate.toFixed(1)}%</div>
         </div>
         <div>
-          <div className="text-[10px] text-slate-600 uppercase tracking-wider">PnL</div>
-          <div className={`text-sm font-bold ${pnlColor}`}>
-            {typeof totalPnl === 'number' ? `$${totalPnl.toFixed(0)}` : `$${totalPnl}`}
-          </div>
+          <div className="text-[9px] text-slate-600 uppercase tracking-wider">Max DD</div>
+          <div className={`text-xs font-bold ${ddColor}`}>{m.maxDD.toFixed(1)}%</div>
+        </div>
+        <div>
+          <div className="text-[9px] text-slate-600 uppercase tracking-wider">R:R</div>
+          <div className={`text-xs font-bold ${rrColor}`}>{m.rr.toFixed(2)}</div>
+        </div>
+        <div>
+          <div className="text-[9px] text-slate-600 uppercase tracking-wider">PnL</div>
+          <div className={`text-xs font-bold ${pnlColor}`}>${m.totalPnl.toFixed(0)}</div>
         </div>
       </div>
-      <div className="text-[10px] text-slate-600 mt-2">{date}</div>
+
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-[10px] text-slate-600">{m.date}</span>
+        {m.pf > 0 && <span className="text-[9px] text-slate-600">PF {m.pf.toFixed(2)}</span>}
+      </div>
     </div>
   );
 }
@@ -71,6 +106,8 @@ export default function CsvLibrary({ user, onLogout }) {
   const [uploadMsg, setUploadMsg] = useState(null);
   const [dragOver, setDragOver]   = useState(false);
   const [fetchingAurum, setFetchingAurum] = useState(false);
+  // Per-strategy sort: { chartvision: 'wr', smc: 'dd', dual_ai: 'rr' }
+  const [sortBy, setSortBy] = useState({});
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
@@ -276,11 +313,25 @@ export default function CsvLibrary({ user, onLogout }) {
         {STRATEGIES.map(s => {
           const colors  = colorMap[s.color];
           const items   = grouped[s.key] || [];
+          const activeSort = sortBy[s.key] || null;
+
+          // Sort items if a sort tab is active
+          const sortedItems = activeSort
+            ? [...items].sort((a, b) => {
+                const opt = SORT_OPTIONS.find(o => o.key === activeSort);
+                if (!opt) return 0;
+                const ma = getMetrics(a);
+                const mb = getMetrics(b);
+                const va = ma[opt.field] || 0;
+                const vb = mb[opt.field] || 0;
+                return opt.desc ? vb - va : va - vb;
+              })
+            : items;
 
           return (
             <div key={s.key} className={`${colors.border} border rounded-xl p-4`}>
               {/* Column header */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">{s.icon}</span>
                   <span className={`text-sm font-bold ${colors.text} tracking-wider uppercase`}>{s.label}</span>
@@ -290,14 +341,36 @@ export default function CsvLibrary({ user, onLogout }) {
                 </span>
               </div>
 
+              {/* Sort tabs */}
+              {items.length > 1 && (
+                <div className="flex gap-1 mb-3">
+                  {SORT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setSortBy(prev => ({
+                        ...prev,
+                        [s.key]: prev[s.key] === opt.key ? null : opt.key,
+                      }))}
+                      className={`px-2 py-0.5 text-[10px] font-bold tracking-wider rounded transition-all
+                        ${activeSort === opt.key
+                          ? `${colors.badge} ring-1 ring-current`
+                          : 'text-slate-600 hover:text-slate-400 bg-slate-800/50'
+                        }`}
+                    >
+                      {opt.label} {activeSort === opt.key ? (opt.desc ? '↓' : '↑') : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {/* Report cards */}
-              <div className="space-y-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
-                {items.length === 0 ? (
+              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-1">
+                {sortedItems.length === 0 ? (
                   <div className="text-center py-8 text-slate-700 text-xs tracking-wider uppercase">
                     No reports yet
                   </div>
                 ) : (
-                  items.map(r => (
+                  sortedItems.map(r => (
                     <ReportCard key={r.id} report={r} colors={colors} onDelete={handleDelete} />
                   ))
                 )}
