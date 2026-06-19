@@ -434,7 +434,7 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="trade" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} label={{ value: 'Trade #', position: 'insideBottom', offset: -3, fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     formatter={(value, name) => {
                       const acctId = name.replace('acct_', '');
                       const st = statements.find(s => s.account_id === acctId);
@@ -464,7 +464,7 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="trade" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} label={{ value: 'Trade #', position: 'insideBottom', offset: -3, fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v}`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     formatter={(value, name) => {
                       const acctId = name.replace('acct_', '');
                       const st = statements.find(s => s.account_id === acctId);
@@ -494,20 +494,25 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="day" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     formatter={(value, name) => {
                       const acctId = name.replace('acct_', '');
                       const st = statements.find(s => s.account_id === acctId);
-                      return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
+                      const color = value >= 0 ? '#4ade80' : '#f87171';
+                      return [<span style={{ color }}>{value.toFixed(2)}%</span>, st?.account_label || `Account ${acctId}`];
                     }}
                   />
                   <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
                   <ReferenceLine y={0} stroke="#475569" />
                   {visibleStatements.map(st => {
                     const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    const baseColor = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                     return (
-                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`}
-                        fill={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} fillOpacity={0.8} radius={[2, 2, 0, 0]} />
+                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`} fillOpacity={0.85} radius={[2, 2, 0, 0]}>
+                        {dailyReturns.map((entry, i) => (
+                          <Cell key={i} fill={entry[`acct_${st.account_id}`] >= 0 ? baseColor : '#ef4444'} />
+                        ))}
+                      </Bar>
                     );
                   })}
                 </BarChart>
@@ -524,20 +529,25 @@ export default function LiveTrading({ user }) {
                   <XAxis dataKey="month" stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} />
                   <YAxis stroke="#64748b" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}%`} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px' }}
+                    contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px', fontSize: '12px', color: '#e2e8f0' }}
                     formatter={(value, name) => {
                       const acctId = name.replace('acct_', '');
                       const st = statements.find(s => s.account_id === acctId);
-                      return [`${value.toFixed(2)}%`, st?.account_label || `Account ${acctId}`];
+                      const color = value >= 0 ? '#4ade80' : '#f87171';
+                      return [<span style={{ color }}>{value.toFixed(2)}%</span>, st?.account_label || `Account ${acctId}`];
                     }}
                   />
                   <Legend formatter={fmtLegend(statements)} wrapperStyle={{ fontSize: '11px' }} />
                   <ReferenceLine y={0} stroke="#475569" />
                   {visibleStatements.map(st => {
                     const idx = statements.findIndex(x => x.account_id === st.account_id);
+                    const baseColor = ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length];
                     return (
-                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`}
-                        fill={ACCOUNT_COLORS[idx % ACCOUNT_COLORS.length]} fillOpacity={0.8} radius={[2, 2, 0, 0]} />
+                      <Bar key={st.account_id} dataKey={`acct_${st.account_id}`} fillOpacity={0.85} radius={[2, 2, 0, 0]}>
+                        {monthlyReturns.map((entry, i) => (
+                          <Cell key={i} fill={entry[`acct_${st.account_id}`] >= 0 ? baseColor : '#ef4444'} />
+                        ))}
+                      </Bar>
                     );
                   })}
                 </BarChart>
