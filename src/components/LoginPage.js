@@ -17,6 +17,12 @@ export default function LoginPage({ onLogin }) {
 
     try {
       if (isSignUp) {
+        const { data: allowed } = await supabase
+          .from('allowed_emails')
+          .select('email')
+          .eq('email', email.toLowerCase())
+          .single();
+        if (!allowed) throw new Error('Access denied. Contact admin (dani3lsimon@gmail.com) for an invitation.');
         const { error } = await supabase.auth.signUp({
           email,
           password,
