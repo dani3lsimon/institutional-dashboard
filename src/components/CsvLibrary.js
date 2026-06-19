@@ -113,12 +113,28 @@ export default function CsvLibrary({ user, onLogout }) {
 
   const fetchReports = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('results')
-        .select('id, data')
-        .order('id', { ascending: false });
+      const { data, error } = await supabase.rpc('get_library_reports');
       if (error) throw error;
-      setReports(data || []);
+      const all = (data || []).map(r => ({
+        id: r.id,
+        data: {
+          strategy: r.strategy,
+          fileName: r.file_name,
+          tradeCount: r.trade_count,
+          uploadedAt: r.uploaded_at,
+          institutionalMetrics: {
+            totalTrades: String(r.trade_count),
+            winRate: String(r.win_rate),
+            expectancy: String(r.expectancy),
+            profitFactor: String(r.profit_factor),
+          },
+          metrics: {
+            maxDrawdown: String(r.max_dd),
+            totalPnL: String(r.total_pnl),
+          },
+        },
+      }));
+      setReports(all);
     } catch (e) {
       console.error('Fetch reports error:', e);
     }
